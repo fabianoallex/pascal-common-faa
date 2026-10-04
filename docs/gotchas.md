@@ -20,3 +20,24 @@ doesn't export it. Delphi Win32 has no such gap: `AtomicCmpExchange` and friends
 FPC when `CPU64` is not defined (`PASCALCOMMON_ATOMIC64_LOCK`). Correct as long as every access
 to the variable goes through `PcAtomic*64`. `tools/ci-test.sh` runs the suite on i386 too, so
 that path is compiled and tested.
+
+## 2. lazbuild builds against a different copy of a package, silently
+
+**Symptom.** A project that requires `pascal_common_faa_jsonmapper` builds and its tests pass,
+but the build log shows the mapper compiled from another folder (the `-Fu` of a separate
+checkout's `packages/lib`), not from the project's own `external/` copy. Measured 2026-10-04
+with lazbuild 4.0 / FPC 3.2.2 on Windows, in the pascal-db-faa pilot (F6) and in this
+repository's own unit tests. Only the Docker builds, which pass `-Fu` by hand, used the
+submodule.
+
+**Cause.** When lazbuild resolves a required package, one registered in the IDE
+(`packagefiles.xml`) wins over a `DefaultFilename` without `Prefer`, and a `DefaultFilename` that
+doesn't exist falls back to the registered one without a word. The bridge's `.lpk` pointed the
+mapper at `external/pascal-jsonmapper-faa`, which doesn't exist in a consumer (submodules are not
+checked out recursively).
+
+**Fix.** The bridge's `.lpk` requires `pascaljsonmapper_pkg` by name only. Each project lists the
+copy it wants, with `DefaultFilename` and `Prefer="True"`, before the packages that need it. This
+repository's test `.lpi` does that for `pascal_common_faa`, the mapper and the bridge, and
+`docs/migrating.md` (steps 3 and 4) gives consumers the same rule. When in doubt, check the paths
+in the build log.

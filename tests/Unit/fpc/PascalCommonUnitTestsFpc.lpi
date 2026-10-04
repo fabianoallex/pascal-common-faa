@@ -30,11 +30,15 @@
     <RequiredPackages>
       <Item>
         <PackageName Value="pascal_common_faa"/>
-        <DefaultFilename Value="..\..\..\packages\pascal_common_faa.lpk"/>
+        <DefaultFilename Value="..\..\..\packages\pascal_common_faa.lpk" Prefer="True"/>
+      </Item>
+      <Item>
+        <PackageName Value="pascaljsonmapper_pkg"/>
+        <DefaultFilename Value="..\..\..\external\pascal-jsonmapper-faa\packages\pascaljsonmapper_pkg.lpk" Prefer="True"/>
       </Item>
       <Item>
         <PackageName Value="pascal_common_faa_jsonmapper"/>
-        <DefaultFilename Value="..\..\..\packages\pascal_common_faa_jsonmapper.lpk"/>
+        <DefaultFilename Value="..\..\..\packages\pascal_common_faa_jsonmapper.lpk" Prefer="True"/>
       </Item>
       <Item>
         <PackageName Value="FPCUnitTestRunner"/>

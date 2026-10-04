@@ -12,23 +12,61 @@ go (plan decision 4).
    Never put it in what the application builds: the application provides the single copy (see
    the README, "For library authors").
 2. **Delete the moved units** (table below) and rename what remains (name map below).
-3. **Depend on the package:** the library's `.lpk` requires `pascal_common_faa` (and
-   `pascal_common_faa_jsonmapper` if it ships the JSON bridge). The test projects point at
-   `external/pascal-common-faa/packages/...` on Lazarus, and add `external/pascal-common-faa/src`
-   (plus `bridges/jsonmapper`) to the search path on Delphi.
-4. **Add the minimum-version check** in a unit every user of the library compiles (`PASCALCOMMON_VERSION`
-   is in `PascalCommon.Version`):
+3. **Depend on the package, by name.** On Lazarus, the library's own `.lpk` requires
+   `pascal_common_faa` **by name only**, with no `DefaultFilename`, and a `MinVersion`:
+
+   ```xml
+   <Item>
+     <PackageName Value="pascal_common_faa"/>
+     <MinVersion Minor="2" Valid="True"/>
+   </Item>
+   ```
+
+   A `DefaultFilename` into `external/` would let Lazarus fall back to the library's private copy:
+   that is the diamond the README rules out. Each test or sample `.lpi` of the library then lists
+   `pascal_common_faa` **first**, with `DefaultFilename` into
+   `external/pascal-common-faa/packages/` and `Prefer="True"`; the library's package resolves to
+   the copy already loaded. Without `Prefer`, a `pascal_common_faa.lpk` registered in the IDE
+   wins over the `DefaultFilename`. On Delphi, add `external/pascal-common-faa/src` to the test
+   projects' search path.
+4. **If the library uses the JSON bridge,** each project that uses it also requires the mapper
+   itself, before the bridge:
+
+   ```xml
+   <Item>
+     <PackageName Value="pascaljsonmapper_pkg"/>
+     <DefaultFilename Value="..\..\external\pascal-jsonmapper-faa\packages\pascaljsonmapper_pkg.lpk" Prefer="True"/>
+   </Item>
+   <Item>
+     <PackageName Value="pascal_common_faa_jsonmapper"/>
+     <DefaultFilename Value="..\..\external\pascal-common-faa\packages\pascal_common_faa_jsonmapper.lpk" Prefer="True"/>
+   </Item>
+   ```
+
+   The bridge's `.lpk` requires `pascaljsonmapper_pkg` by name only, so the project decides which
+   copy of the mapper is used. Leave out the mapper line and lazbuild **silently** builds against
+   whatever `pascaljsonmapper_pkg` is registered in the IDE. Measured in the pascal-db-faa pilot
+   (F6) and in this repository's own tests. On Delphi, add `bridges/jsonmapper` and your
+   mapper's `src` to the search path.
+5. **Add the minimum-version check** in a unit every user of the library compiles, **after the
+   `uses` that brings in `PascalCommon.Version`**: `$IF` only sees constants of units already
+   used. pascal-db-faa has it in `PascalDb.Interfaces`, right after the interface `uses`:
 
    ```pascal
+   uses
+     ..., PascalCommon.Version;
+
    {$IF PASCALCOMMON_VERSION < 200}
      {$MESSAGE FATAL 'pascal-db-faa needs pascal-common-faa 0.2.0 or later'}
    {$IFEND}
    ```
 
-5. **CI:** check out submodules without `recursive`. pascal-common-faa has its own
+   Measured in the pilot on both compilers: an older copy stops the build with that text (FPC:
+   `Fatal: (2022) User defined: ...`; Delphi: `F1054 ...`).
+6. **CI:** check out submodules without `recursive`. pascal-common-faa has its own
    `external/pascal-jsonmapper-faa`, used only by its own tests. A library that also uses the
-   mapper keeps its own copy and builds the bridge against that one.
-6. **Run every suite** (unit, integration, samples) on both compilers, with 0 leaks.
+   mapper keeps its own copy and builds the bridge against that one (step 4).
+7. **Run every suite** (unit, integration, samples) on both compilers, with 0 leaks.
 
 ## Units
 

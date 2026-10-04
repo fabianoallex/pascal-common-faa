@@ -41,8 +41,9 @@ end;
 ## Installing
 
 **Lazarus:** open and install `packages/pascal_common_faa.lpk`. For the JSON bridge, also
-`packages/pascal_common_faa_jsonmapper.lpk`, which needs pascal-jsonmapper-faa's
-`pascaljsonmapper_pkg.lpk`.
+`packages/pascal_common_faa_jsonmapper.lpk`, which requires pascal-jsonmapper-faa's
+`pascaljsonmapper_pkg` by name: install or require that one first. A project should name the copy
+it wants with `Prefer="True"` (see `docs/gotchas.md`, gotcha 2).
 
 **Delphi:** add `src` to the project's search path (and `bridges/jsonmapper` plus
 pascal-jsonmapper-faa's `src` for the bridge).

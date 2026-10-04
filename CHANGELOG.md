@@ -6,6 +6,16 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+### Changed
+
+- `pascal_common_faa_jsonmapper.lpk` requires `pascaljsonmapper_pkg` by name only, no longer
+  pointing into this repository's `external/` submodule, which doesn't exist in a consumer. The
+  project that uses the bridge names its own copy of the mapper (gotcha 2). The test `.lpi` now
+  prefers the submodule copies: until now, local lazbuild runs had silently used the mapper
+  registered in the IDE.
+- `docs/migrating.md`: how a library's `.lpk` and its test projects require `pascal_common_faa`
+  and the mapper, and where the version check goes (findings of the pascal-db-faa pilot).
+
 ## [0.2.0] - 2026-10-04
 
 ### Removed
