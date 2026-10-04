@@ -119,11 +119,13 @@
         <DCCReference Include="..\..\src\PascalCommon.SystemContext.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.ClockCache.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Optionals.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.ThreadPool.pas"/>
         <DCCReference Include="PascalCommon.VersionTests.pas"/>
         <DCCReference Include="PascalCommon.ThreadingTests.pas"/>
         <DCCReference Include="PascalCommon.SystemContextTests.pas"/>
         <DCCReference Include="PascalCommon.ClockCacheTests.pas"/>
         <DCCReference Include="PascalCommon.OptionalsTests.pas"/>
+        <DCCReference Include="PascalCommon.ThreadPoolTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

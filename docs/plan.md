@@ -101,9 +101,16 @@ translate and rewrite in the `TAssert` dialect).
 - ~~**Signedness of the 64-bit atomics.**~~ Settled in F1: both, as overloads (`Int64` and
   `UInt64`), sharing one `Int64` implementation. Measured on FPC 3.2.2 (x86_64 Windows/Linux,
   i386 Linux) and Delphi 12 (Win32, Win64).
-- **Global pool creation.** `TXThreadPool.Create` is cheap (no threads until the first `Queue`),
-  so `PcPool` can be created in `initialization` and the double-checked locking goes away. Confirm
-  that finalization order still lets consumers drain their work before the pool is freed.
+- ~~**Global pool creation.**~~ Settled in F3: `PcPool` is created in `initialization`. A unit
+  that uses `PascalCommon.ThreadPool` is finalized before it, so `PcPool` still runs work there;
+  `PascalCommon.ThreadPoolTests`' finalization checks it on every run (FPC and Delphi), and the
+  FPC scripts fail on its `FINALIZATION CHECK FAILED` line (the failure path was checked by
+  inverting the condition once).
+- **Found in F3:** `TXThreadPool.Destroy` never discarded the queued items, although the Pipes
+  header and test said so: its workers look at the queue before the shutdown flag, so they
+  drain it before they exit. Kept as is (it is the behavior every donor has) and documented;
+  the test now asserts that every queued item runs. Worth knowing in F8: pipes' docs describe the
+  old, wrong contract.
 - ~~**`PcTickUs` on FPC/Unix other than Linux**~~ falls back to `GetTickCount64 × 1000`; noted
   in the unit header (F1).
 - **Found in F1:** FPC 3.2.2 has no 64-bit `InterLocked*` on 32-bit CPUs, so the donors' 64-bit
@@ -117,7 +124,7 @@ translate and rewrite in the `TAssert` dialect).
 | F0 | here | Skeleton: `.inc`, package, `PascalCommon.Version` + test, DUnitX and FPCUnit runners, mirror generator, scripts, CI | FPC suite green with 0 leaks — **done 2026-10-04** on Windows (`tools/test_fpc.sh`) and Linux (`tools/ci-test.sh`); the version check measured to abort the build when the minimum is raised (FPC). Delphi 12 CE Win32 and Win64: 2/2, 0 leaks (the `$IF` on a constant from another unit compiles there; the abort path was only measured on FPC). Committed as `b774354`, public at https://github.com/fabianoallex/pascal-common-faa, GitHub CI green (run 37221548830) |
 | F1 | here | `PascalCommon.Threading` (atomics + ticks, merged) with tests | FPC and Delphi green, 0 leaks — **FPC done 2026-10-04**: 15/15, 0 leaks on Windows x64, Linux x86_64 and Linux i386; 40 runs green at `--cpus=1` with 8 containers at once. Delphi 12 CE Win32 and Win64: 15/15, 0 leaks |
 | F2 | here | `SystemContext`, `ClockCache`, `Optionals` + their tests | idem — **FPC done 2026-10-04**: 97/97 (ClockCache 12 and Optionals 65, same counts as pascal-db-faa, plus 5 new SystemContext tests), 0 leaks on Windows x64, Linux x86_64 and i386; 40 runs green at `--cpus=1`. Delphi 12 CE Win32 and Win64: 97/97, 0 leaks |
-| F3 | here | `PascalCommon.ThreadPool` (monitor + pool, eager global pool) + ported tests | idem |
+| F3 | here | `PascalCommon.ThreadPool` (monitor + pool, eager global pool) + ported tests | idem — **FPC done 2026-10-04**: 105/105 (8 new ThreadPool tests), 0 leaks on Windows x64, Linux x86_64 and i386; 40 runs green at `--cpus=1`. Delphi 12 CE Win32 and Win64: 105/105, 0 leaks, finalization check silent |
 | F4 | here | jsonmapper bridge + submodule + tests | idem; CI checks out submodules |
 | F5 | here | README, `docs/migrating.md` (name map), CHANGELOG, release 0.1.0 | tag pushed (ask first) |
 | F6 | pascal-db-faa | Pilot: drop the moved units, `external/pascal-common-faa`, version check, `Pdb*` → `Pc*` | unit suite + the 12 integration combinations + samples green; findings fed back here |

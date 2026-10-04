@@ -21,11 +21,13 @@ uses
   PascalCommon.SystemContext in '..\..\src\PascalCommon.SystemContext.pas',
   PascalCommon.ClockCache in '..\..\src\PascalCommon.ClockCache.pas',
   PascalCommon.Optionals in '..\..\src\PascalCommon.Optionals.pas',
+  PascalCommon.ThreadPool in '..\..\src\PascalCommon.ThreadPool.pas',
   PascalCommon.VersionTests in 'PascalCommon.VersionTests.pas',
   PascalCommon.ThreadingTests in 'PascalCommon.ThreadingTests.pas',
   PascalCommon.SystemContextTests in 'PascalCommon.SystemContextTests.pas',
   PascalCommon.ClockCacheTests in 'PascalCommon.ClockCacheTests.pas',
-  PascalCommon.OptionalsTests in 'PascalCommon.OptionalsTests.pas';
+  PascalCommon.OptionalsTests in 'PascalCommon.OptionalsTests.pas',
+  PascalCommon.ThreadPoolTests in 'PascalCommon.ThreadPoolTests.pas';
 
 var
   runner: ITestRunner;

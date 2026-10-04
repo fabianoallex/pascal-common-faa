@@ -23,3 +23,7 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
   `PascalCommon.ClockCache` (`TClockCache<K, V>`) and `PascalCommon.Optionals` (`IOptXxx`,
   `INullXxx`, `IOptNullXxx`, `TOptionals`), moved from pascal-db-faa with their names unchanged,
   together with their tests. New: a test fixture of its own for `SystemContext`.
+- `PascalCommon.ThreadPool`: `TPcMonitor` (lock + condition variable), `TPcWorkItem`,
+  `TPcThreadPool` (with `QueueDepth`) and the process-wide `PcPool`, created in the unit's
+  initialization instead of lazily. Moved from `Pipes/AMQP/Redis.Threading`; the monitor's wait
+  generation and the pool's worker thread are now private nested types.

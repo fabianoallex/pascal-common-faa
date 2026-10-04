@@ -41,6 +41,10 @@
         <Filename Value="..\src\PascalCommon.Optionals.pas"/>
         <UnitName Value="PascalCommon.Optionals"/>
       </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.ThreadPool.pas"/>
+        <UnitName Value="PascalCommon.ThreadPool"/>
+      </Item>
     </Files>
     <RequiredPkgs>
       <Item>
