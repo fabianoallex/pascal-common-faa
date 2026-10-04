@@ -68,7 +68,7 @@
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
-        <DCC_UnitSearchPath>$(DUnitX);..\..\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(DUnitX);..\..\src;..\..\external\pascal-jsonmapper-faa\src;..\..\bridges\jsonmapper;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <SanitizedProjectName>PascalCommon_UnitTests</SanitizedProjectName>
         <UsingDelphiRTL>true</UsingDelphiRTL>
     </PropertyGroup>
@@ -120,12 +120,16 @@
         <DCCReference Include="..\..\src\PascalCommon.ClockCache.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Optionals.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.ThreadPool.pas"/>
+        <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas"/>
+        <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas"/>
+        <DCCReference Include="..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas"/>
         <DCCReference Include="PascalCommon.VersionTests.pas"/>
         <DCCReference Include="PascalCommon.ThreadingTests.pas"/>
         <DCCReference Include="PascalCommon.SystemContextTests.pas"/>
         <DCCReference Include="PascalCommon.ClockCacheTests.pas"/>
         <DCCReference Include="PascalCommon.OptionalsTests.pas"/>
         <DCCReference Include="PascalCommon.ThreadPoolTests.pas"/>
+        <DCCReference Include="PascalCommon.JsonMapperOptionalsTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

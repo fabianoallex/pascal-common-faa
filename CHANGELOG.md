@@ -27,3 +27,7 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
   `TPcThreadPool` (with `QueueDepth`) and the process-wide `PcPool`, created in the unit's
   initialization instead of lazily. Moved from `Pipes/AMQP/Redis.Threading`; the monitor's wait
   generation and the pool's worker thread are now private nested types.
+- `PascalCommon.JsonMapper.Optionals` (`bridges/jsonmapper`, package
+  `pascal_common_faa_jsonmapper.lpk`): the pascal-jsonmapper-faa converter for the optional
+  types, moved from pascal-db-faa with its tests. pascal-jsonmapper-faa v0.2.0 is a submodule in
+  `external/`, used by the tests only.

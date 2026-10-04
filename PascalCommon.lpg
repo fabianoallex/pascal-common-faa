@@ -3,6 +3,7 @@
   <ProjectGroup FileVersion="2">
     <Targets>
       <Target FileName="packages\pascal_common_faa.lpk"/>
+      <Target FileName="packages\pascal_common_faa_jsonmapper.lpk"/>
       <Target FileName="tests\Unit\fpc\PascalCommonUnitTestsFpc.lpi">
         <BuildModes>
           <Mode Name="Default"/>

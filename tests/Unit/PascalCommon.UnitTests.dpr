@@ -22,12 +22,16 @@ uses
   PascalCommon.ClockCache in '..\..\src\PascalCommon.ClockCache.pas',
   PascalCommon.Optionals in '..\..\src\PascalCommon.Optionals.pas',
   PascalCommon.ThreadPool in '..\..\src\PascalCommon.ThreadPool.pas',
+  PascalJsonMapper.Json in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas',
+  PascalJsonMapper.Mapper in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas',
+  PascalCommon.JsonMapper.Optionals in '..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas',
   PascalCommon.VersionTests in 'PascalCommon.VersionTests.pas',
   PascalCommon.ThreadingTests in 'PascalCommon.ThreadingTests.pas',
   PascalCommon.SystemContextTests in 'PascalCommon.SystemContextTests.pas',
   PascalCommon.ClockCacheTests in 'PascalCommon.ClockCacheTests.pas',
   PascalCommon.OptionalsTests in 'PascalCommon.OptionalsTests.pas',
-  PascalCommon.ThreadPoolTests in 'PascalCommon.ThreadPoolTests.pas';
+  PascalCommon.ThreadPoolTests in 'PascalCommon.ThreadPoolTests.pas',
+  PascalCommon.JsonMapperOptionalsTests in 'PascalCommon.JsonMapperOptionalsTests.pas';
 
 var
   runner: ITestRunner;

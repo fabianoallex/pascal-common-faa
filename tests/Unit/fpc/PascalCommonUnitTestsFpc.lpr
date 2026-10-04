@@ -29,7 +29,8 @@ uses
   PascalCommon.SystemContextTests,
   PascalCommon.ClockCacheTests,
   PascalCommon.OptionalsTests,
-  PascalCommon.ThreadPoolTests;
+  PascalCommon.ThreadPoolTests,
+  PascalCommon.JsonMapperOptionalsTests;
 
 var
   ConsoleApp: TTestRunner;
