@@ -1,0 +1,129 @@
+# pascal-common-faa — plan
+
+Started 2026-10-04, from a design session in pascal-db-faa. This file is the plan and the record
+of why; `CLAUDE.md` holds the rules that stay after the plan is done.
+
+## Why this repository exists
+
+Four libraries carry their own copy of the same infrastructure, and the optional types live in
+one of them:
+
+| Library | Unit | Code lines (no comments) | Contents |
+|---|---|---|---|
+| pascal-named-pipes-faa | `Pipes.Threading` | 526 | atomics + monitor + thread pool + keyed dispatcher + heartbeat thread |
+| pascal-amqp-faa | `AMQP.Threading` | 333 | atomics + monitor + thread pool + `AmqpWallMs` |
+| pascal-redis-faa | `Redis.Threading` | 320 | atomics + monitor + thread pool |
+| pascal-db-faa | `PascalDb.Threading` | 103 | atomics (Int64) + `TickMs` + `TickUs` |
+
+Measured 2026-10-03 (prefixes normalized, comments stripped, `diff`):
+
+- Pipes, AMQP and Redis share one origin (delphi-amqp-faa) and **have not diverged**: the code
+  they have in common (atomics, monitor, pool, global pool) is identical line by line. Every
+  difference is an addition — AMQP added `AmqpWallMs`; Pipes added `CompareExchange64`, `Add64`,
+  `QueueDepth`, `TPipeKeyedDispatcher`, `TPipeHeartbeatThread`. Redis is the plain copy and says
+  so in its header ("a bug fix on one side must be ported by hand to the other").
+- No fix was made in one copy and missed in another (git history: Redis 1 commit on the unit,
+  AMQP 3, Pipes 5, all features).
+- `PascalDb.Threading` is a different lineage (from delphi-api-infra-faa): 64-bit counters are
+  `Int64` (the others use `UInt64`), it alone has `TickUs`, and it has no monitor or pool. Its
+  32-bit atomics and `TickMs` have the same bodies as the others.
+- The global pools (`AmqpPool`, `PipePool`, `RedisPool`, `PipeGroupDispatcher`) are created
+  lazily with double-checked locking: the first read of the global is outside the lock and has
+  no memory barrier. Fine on x86/x64; on a weakly ordered CPU (ARM) it is the same family as the
+  `TClock`/`TSleep` race fixed in pascal-db-faa (`5c853c6`). Not measured on ARM.
+
+The optional types (`PascalDb.Optionals`, 1483 lines) depend only on `ClockCache`,
+`SystemContext` and `Threading` — no database code. The reason to share them rather than copy
+them: an interface's identity is its GUID and its unit. If pipes or amqp had their own
+`IOptString`, a DTO filled from a message could not be handed to the database's `IParams`
+without converting every field.
+
+## Decisions
+
+1. **One base repository, small and slow-moving.** Optionals and the threading primitives
+   together, since the optionals already pull in `Threading` and `ClockCache`.
+2. **pascal-jsonmapper-faa stays separate.** It is a feature library (3,100 lines, RTL only, its
+   own releases), not infrastructure; putting it here would make every library carry a JSON
+   mapper and turn every mapper release into a base release. The optionals bridge
+   (`PascalDb.JsonMapper.Optionals`) moves here as an optional package, with the mapper as a
+   test-only submodule — the same arrangement pascal-db-faa has today.
+3. **Names.** Units `PascalCommon.*` (a bare `Common.*` collides with delphi-api-infra-faa's
+   `Common.*`, the same reason pascal-db-faa uses `PascalDb.*`). Free functions `Pc*`
+   (`PcAtomicInc`, `PcTickMs`), types `TPc*` (`TPcMonitor`, `TPcThreadPool`). The optional types
+   keep their names (`IOptString`, `TOptionals`...), which are already neutral.
+4. **No backward compatibility.** None of the libraries has a reported user. No alias units;
+   instead, a migration guide (`docs/migrating.md`) with the name map.
+5. **Migration order.** pascal-db-faa first, right after this library works (it is the donor and
+   its integration suite, 12 adapter × database combinations, exercises the optionals more than
+   anything else). Whatever that pilot finds goes into this library before 1.0. Then pipes, amqp
+   and redis, each in its own session, in any order.
+6. **Diamond dependencies** (an application using db + amqp + pipes, each depending on this
+   library) — prevented by four rules, also in `CLAUDE.md`:
+   1. a library never ships this one inside itself: the submodule lives in `external/` for tests
+      and CI only, and the application provides the single copy (one registered
+      `pascal_common_faa.lpk` — Lazarus resolves packages by name — or one search path in Delphi);
+   2. strict semver, additive only within a major version, so "different versions" becomes "the
+      newest one serves everybody";
+   3. a minimum-version check at compile time in each consumer —
+      `(*$IF PASCALCOMMON_VERSION < 10400*) (*$MESSAGE FATAL '...'*) (*$IFEND*)` (written with
+      braces in real code). Measured on FPC 3.2.2: a constant from another unit is evaluated in
+      `$IF`, and the fatal message aborts with the text given. Delphi documents the same
+      (constant expressions in `$IF`); to be confirmed in the IDE with the version test;
+   4. keep the library small (decision 2).
+
+## What comes in, and from where
+
+| Unit here | From | Notes |
+|---|---|---|
+| `PascalCommon.Version` | new | `PASCALCOMMON_VERSION` = major × 10000 + minor × 100 + patch |
+| `PascalCommon.Threading` | `PascalDb.Threading` + the shared part of `Pipes/AMQP/Redis.Threading` | 32-bit atomics (Inc, Dec, Get, Set, CompareExchange), 64-bit atomics, `PcTickMs`, `PcTickUs` |
+| `PascalCommon.ThreadPool` | `Redis.Threading` (the plain copy) + `QueueDepth` from Pipes | `TPcMonitor`, `TPcWorkItem`, `TPcThreadPool`, `PcPool`. Separate unit so pascal-db-faa doesn't link a pool it doesn't use |
+| `PascalCommon.SystemContext` | `PascalDb.SystemContext` | `IClock`/`TClock`, `ISleep`/`TSleep`; defaults created in `initialization` (the `5c853c6` fix) |
+| `PascalCommon.ClockCache` | `PascalDb.ClockCache` | |
+| `PascalCommon.Optionals` | `PascalDb.Optionals` | |
+| `PascalCommon.JsonMapper.Optionals` (`bridges/jsonmapper`) | `PascalDb.JsonMapper.Optionals` | package `pascal_common_faa_jsonmapper.lpk`; mapper as submodule `external/pascal-jsonmapper-faa` |
+
+Stays where it is: `TPipeKeyedDispatcher` and `TPipeHeartbeatThread` (pipes), `AmqpWallMs`
+(amqp), `PascalDb.SafeLog` (only pascal-db-faa uses it; candidate if a second user appears).
+
+Tests come with the code: `PascalDb.OptionalsTests`, `PascalDb.ClockCacheTests`,
+`PascalDb.JsonMapperOptionalsTests` (already in English and in the FPCUnit dialect), and the
+atomics/monitor/pool part of `Pipes.ThreadingTests` (Portuguese, DUnitX-native `Assert`:
+translate and rewrite in the `TAssert` dialect).
+
+## Open points, to settle with a measurement during implementation
+
+- **Signedness of the 64-bit atomics.** pascal-db-faa counts with `Int64`, the others keep ticks
+  in `UInt64`. Proposal: both, as overloads (`var` parameters must match exactly, so overload
+  resolution is unambiguous) — check on both compilers before committing to it.
+- **Global pool creation.** `TXThreadPool.Create` is cheap (no threads until the first `Queue`),
+  so `PcPool` can be created in `initialization` and the double-checked locking goes away. Confirm
+  that finalization order still lets consumers drain their work before the pool is freed.
+- **`PcTickUs` on FPC/Unix other than Linux** falls back to `GetTickCount64 × 1000`. Fine for
+  now; note it in the unit header.
+
+## Phases
+
+| # | Where | What | Done when |
+|---|---|---|---|
+| F0 | here | Skeleton: `.inc`, package, `PascalCommon.Version` + test, DUnitX and FPCUnit runners, mirror generator, scripts, CI | FPC suite green with 0 leaks — **done 2026-10-04** on Windows (`tools/test_fpc.sh`) and Linux (`tools/ci-test.sh`); the version check measured to abort the build when the minimum is raised (FPC). Delphi 12 CE Win32 and Win64: 2/2, 0 leaks (the `$IF` on a constant from another unit compiles there; the abort path was only measured on FPC). **Pending:** first commit, GitHub repository |
+| F1 | here | `PascalCommon.Threading` (atomics + ticks, merged) with tests | FPC and Delphi green, 0 leaks |
+| F2 | here | `SystemContext`, `ClockCache`, `Optionals` + their tests | idem |
+| F3 | here | `PascalCommon.ThreadPool` (monitor + pool, eager global pool) + ported tests | idem |
+| F4 | here | jsonmapper bridge + submodule + tests | idem; CI checks out submodules |
+| F5 | here | README, `docs/migrating.md` (name map), CHANGELOG, release 0.1.0 | tag pushed (ask first) |
+| F6 | pascal-db-faa | Pilot: drop the moved units, `external/pascal-common-faa`, version check, `Pdb*` → `Pc*` | unit suite + the 12 integration combinations + samples green; findings fed back here |
+| F7 | here | Fixes from the pilot; release 1.0.0 | |
+| F8 | pipes, amqp, redis | Each one migrates in its own session | each library's own suites green |
+
+## Name map (for `docs/migrating.md`)
+
+| Before | After |
+|---|---|
+| `PascalDb.Threading`, `Pipes.Threading`, `AMQP.Threading`, `Redis.Threading` (atomics, ticks) | `PascalCommon.Threading` |
+| `PdbAtomicInc`, `PipeAtomicInc`, `AmqpAtomicInc`, `RedisAtomicInc`... | `PcAtomicInc`... |
+| `PdbTickMs`, `PipeTickMs`... / `PdbTickUs` | `PcTickMs` / `PcTickUs` |
+| `TPipeMonitor`, `TAMQPMonitor`, `TRedisMonitor` | `TPcMonitor` (`PascalCommon.ThreadPool`) |
+| `TPipeWorkItem`, `TPipeThreadPool`, `PipePool` (and AMQP/Redis) | `TPcWorkItem`, `TPcThreadPool`, `PcPool` |
+| `PascalDb.SystemContext`, `PascalDb.ClockCache`, `PascalDb.Optionals` | `PascalCommon.SystemContext`, `.ClockCache`, `.Optionals` |
+| `PascalDb.JsonMapper.Optionals`, `pascal_db_faa_jsonmapper.lpk` | `PascalCommon.JsonMapper.Optionals`, `pascal_common_faa_jsonmapper.lpk` |

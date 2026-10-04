@@ -1,0 +1,36 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{C1AA545C-F2E5-43D8-A174-9CFEEEC459A5}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="tests\Unit\PascalCommon.UnitTests.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="PascalCommon_UnitTests">
+        <MSBuild Projects="tests\Unit\PascalCommon.UnitTests.dproj"/>
+    </Target>
+    <Target Name="PascalCommon_UnitTests:Clean">
+        <MSBuild Projects="tests\Unit\PascalCommon.UnitTests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PascalCommon_UnitTests:Make">
+        <MSBuild Projects="tests\Unit\PascalCommon.UnitTests.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="PascalCommon_UnitTests"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="PascalCommon_UnitTests:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="PascalCommon_UnitTests:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
