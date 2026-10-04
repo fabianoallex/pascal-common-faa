@@ -15,7 +15,7 @@
     </CompilerOptions>
     <Description Value="Base library shared by the *-faa libraries (Delphi and Free Pascal/Lazarus, dual-compiler): optional/nullable types, portable atomics and monotonic time, a monitor and a thread pool, a clock/sleep context and a bounded cache."/>
     <License Value="MIT"/>
-    <Version Minor="1"/>
+    <Version Minor="2"/>
     <Files>
       <Item>
         <Filename Value="..\src\pascalcommon.inc"/>

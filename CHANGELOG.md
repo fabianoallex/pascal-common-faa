@@ -6,6 +6,8 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-04
+
 ### Removed
 
 - The deprecated `TOptNullXxx.SafeNullable`, `SafeOptional` and `SafeOptNull` (27 methods, 3 per
@@ -43,5 +45,6 @@ First release: the code shared by the `*-faa` libraries, moved here from their o
 - `README.md` and `docs/migrating.md` (moving a library off its own copy: units, name map,
   behavior differences).
 
-[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/fabianoallex/pascal-common-faa/releases/tag/v0.1.0

@@ -20,8 +20,8 @@ go (plan decision 4).
    is in `PascalCommon.Version`):
 
    ```pascal
-   {$IF PASCALCOMMON_VERSION < 100}
-     {$MESSAGE FATAL 'pascal-db-faa needs pascal-common-faa 0.1.0 or later'}
+   {$IF PASCALCOMMON_VERSION < 200}
+     {$MESSAGE FATAL 'pascal-db-faa needs pascal-common-faa 0.2.0 or later'}
    {$IFEND}
    ```
 
@@ -65,7 +65,7 @@ go (plan decision 4).
 | `IClock`/`TClock`, `ITicker`/`TTicker`, `ISleep`/`TSleep` | unchanged | see "Name clash" below |
 | `TClockCache`, `TCacheHitRate`, `TCacheStats`, `TAdmissionPolicy` | unchanged | |
 | `IOptXxx`, `INullXxx`, `IOptNullXxx`, `TOptNullXxx`, `TOptionals` | unchanged | |
-| `TOptNullXxx.SafeNullable`, `SafeOptional`, `SafeOptNull` (deprecated) | `TOptionals.Safe` | removed after 0.1.0 |
+| `TOptNullXxx.SafeNullable`, `SafeOptional`, `SafeOptNull` (deprecated) | `TOptionals.Safe` | removed in 0.2.0 |
 | `TOptionalsJsonConverter`, `RegisterOptionalsConverter` | unchanged | |
 
 A rename with `sed`, for pascal-db-faa (check the diff; the other libraries need their own
