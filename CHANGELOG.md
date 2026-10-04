@@ -6,6 +6,11 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-04
+
+The API is now stable: within 1.x, releases only add (no rename, no signature change, no
+behavior change a consumer could observe). Moved to 1.0 after the pascal-db-faa pilot.
+
 ### Changed
 
 - `pascal_common_faa_jsonmapper.lpk` requires `pascaljsonmapper_pkg` by name only, no longer
@@ -55,6 +60,7 @@ First release: the code shared by the `*-faa` libraries, moved here from their o
 - `README.md` and `docs/migrating.md` (moving a library off its own copy: units, name map,
   behavior differences).
 
-[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/fabianoallex/pascal-common-faa/releases/tag/v0.1.0

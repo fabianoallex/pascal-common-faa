@@ -18,7 +18,7 @@ go (plan decision 4).
    ```xml
    <Item>
      <PackageName Value="pascal_common_faa"/>
-     <MinVersion Minor="2" Valid="True"/>
+     <MinVersion Major="1" Valid="True"/>
    </Item>
    ```
 
@@ -56,8 +56,8 @@ go (plan decision 4).
    uses
      ..., PascalCommon.Version;
 
-   {$IF PASCALCOMMON_VERSION < 200}
-     {$MESSAGE FATAL 'pascal-db-faa needs pascal-common-faa 0.2.0 or later'}
+   {$IF PASCALCOMMON_VERSION < 10000}
+     {$MESSAGE FATAL 'pascal-db-faa needs pascal-common-faa 1.0.0 or later'}
    {$IFEND}
    ```
 
