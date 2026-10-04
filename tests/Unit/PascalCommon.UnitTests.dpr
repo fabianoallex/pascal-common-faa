@@ -17,7 +17,9 @@ uses
   DUnitX.TestFramework,
   PascalCommon.Version in '..\..\src\PascalCommon.Version.pas',
   PascalCommon.DUnitXCompat in 'PascalCommon.DUnitXCompat.pas',
-  PascalCommon.VersionTests in 'PascalCommon.VersionTests.pas';
+  PascalCommon.Threading in '..\..\src\PascalCommon.Threading.pas',
+  PascalCommon.VersionTests in 'PascalCommon.VersionTests.pas',
+  PascalCommon.ThreadingTests in 'PascalCommon.ThreadingTests.pas';
 
 var
   runner: ITestRunner;

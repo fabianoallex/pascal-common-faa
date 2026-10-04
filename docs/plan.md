@@ -93,21 +93,24 @@ translate and rewrite in the `TAssert` dialect).
 
 ## Open points, to settle with a measurement during implementation
 
-- **Signedness of the 64-bit atomics.** pascal-db-faa counts with `Int64`, the others keep ticks
-  in `UInt64`. Proposal: both, as overloads (`var` parameters must match exactly, so overload
-  resolution is unambiguous) — check on both compilers before committing to it.
+- ~~**Signedness of the 64-bit atomics.**~~ Settled in F1: both, as overloads (`Int64` and
+  `UInt64`), sharing one `Int64` implementation. Measured on FPC 3.2.2 (x86_64 Windows/Linux,
+  i386 Linux) and Delphi 12 (Win32, Win64).
 - **Global pool creation.** `TXThreadPool.Create` is cheap (no threads until the first `Queue`),
   so `PcPool` can be created in `initialization` and the double-checked locking goes away. Confirm
   that finalization order still lets consumers drain their work before the pool is freed.
-- **`PcTickUs` on FPC/Unix other than Linux** falls back to `GetTickCount64 × 1000`. Fine for
-  now; note it in the unit header.
+- ~~**`PcTickUs` on FPC/Unix other than Linux**~~ falls back to `GetTickCount64 × 1000`; noted
+  in the unit header (F1).
+- **Found in F1:** FPC 3.2.2 has no 64-bit `InterLocked*` on 32-bit CPUs, so the donors' 64-bit
+  atomics don't compile on FPC i386 (measured with `PascalDb.Threading`). Fixed here with a lock
+  fallback; gotcha 1. CI now also runs the suite on i386.
 
 ## Phases
 
 | # | Where | What | Done when |
 |---|---|---|---|
-| F0 | here | Skeleton: `.inc`, package, `PascalCommon.Version` + test, DUnitX and FPCUnit runners, mirror generator, scripts, CI | FPC suite green with 0 leaks — **done 2026-10-04** on Windows (`tools/test_fpc.sh`) and Linux (`tools/ci-test.sh`); the version check measured to abort the build when the minimum is raised (FPC). Delphi 12 CE Win32 and Win64: 2/2, 0 leaks (the `$IF` on a constant from another unit compiles there; the abort path was only measured on FPC). **Pending:** first commit, GitHub repository |
-| F1 | here | `PascalCommon.Threading` (atomics + ticks, merged) with tests | FPC and Delphi green, 0 leaks |
+| F0 | here | Skeleton: `.inc`, package, `PascalCommon.Version` + test, DUnitX and FPCUnit runners, mirror generator, scripts, CI | FPC suite green with 0 leaks — **done 2026-10-04** on Windows (`tools/test_fpc.sh`) and Linux (`tools/ci-test.sh`); the version check measured to abort the build when the minimum is raised (FPC). Delphi 12 CE Win32 and Win64: 2/2, 0 leaks (the `$IF` on a constant from another unit compiles there; the abort path was only measured on FPC). Committed as `b774354`, public at https://github.com/fabianoallex/pascal-common-faa, GitHub CI green (run 37221548830) |
+| F1 | here | `PascalCommon.Threading` (atomics + ticks, merged) with tests | FPC and Delphi green, 0 leaks — **FPC done 2026-10-04**: 15/15, 0 leaks on Windows x64, Linux x86_64 and Linux i386; 40 runs green at `--cpus=1` with 8 containers at once. Delphi 12 CE Win32 and Win64: 15/15, 0 leaks |
 | F2 | here | `SystemContext`, `ClockCache`, `Optionals` + their tests | idem |
 | F3 | here | `PascalCommon.ThreadPool` (monitor + pool, eager global pool) + ported tests | idem |
 | F4 | here | jsonmapper bridge + submodule + tests | idem; CI checks out submodules |

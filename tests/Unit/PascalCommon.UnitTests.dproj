@@ -115,7 +115,9 @@
         </DelphiCompile>
         <DCCReference Include="..\..\src\PascalCommon.Version.pas"/>
         <DCCReference Include="PascalCommon.DUnitXCompat.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.Threading.pas"/>
         <DCCReference Include="PascalCommon.VersionTests.pas"/>
+        <DCCReference Include="PascalCommon.ThreadingTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

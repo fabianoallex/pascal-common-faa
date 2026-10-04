@@ -24,7 +24,8 @@ uses
   Interfaces, Forms, GuiTestRunner,
   {$ENDIF}
   Classes, consoletestrunner, testregistry,
-  PascalCommon.VersionTests;
+  PascalCommon.VersionTests,
+  PascalCommon.ThreadingTests;
 
 var
   ConsoleApp: TTestRunner;

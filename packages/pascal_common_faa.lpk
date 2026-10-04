@@ -25,6 +25,10 @@
         <Filename Value="..\src\PascalCommon.Version.pas"/>
         <UnitName Value="PascalCommon.Version"/>
       </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Threading.pas"/>
+        <UnitName Value="PascalCommon.Threading"/>
+      </Item>
     </Files>
     <RequiredPkgs>
       <Item>
