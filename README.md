@@ -9,7 +9,12 @@ It also holds the optional types, which must be one shared type: a DTO filled fr
 request can then be handed to the database layer as is. The library is small on purpose, and
 changes slowly.
 
-Tested on FPC 3.2.2 (Windows x64, Linux x86_64, Linux i386) and Delphi 12 (Win32, Win64).
+Tested here on FPC 3.2.2 (Windows x64, Linux x86_64, Linux i386) and Delphi 12 (Win32, Win64).
+Delphi for Android (ARM) is a consumer target that has only been compiled so far, inside
+pascal-named-pipes-faa's Android test project, not run on a device. Nothing in the code is
+Windows-only, and the shared instances (`PcPool`, the default clock and sleep) are created in
+`initialization` instead of lazily, which is what keeps them safe on weakly ordered CPUs such
+as ARM.
 
 ## Contents
 

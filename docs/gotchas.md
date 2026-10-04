@@ -41,3 +41,32 @@ copy it wants, with `DefaultFilename` and `Prefer="True"`, before the packages t
 repository's test `.lpi` does that for `pascal_common_faa`, the mapper and the bridge, and
 `docs/migrating.md` (steps 3 and 4) gives consumers the same rule. When in doubt, check the paths
 in the build log.
+
+## 3. `sed -i` turns CRLF into LF on Git for Windows
+
+**Symptom.** After a rename with `sed -i` in Git Bash, every file passed to it has LF line
+endings, including the files where nothing matched. With `core.autocrlf=true`, `git diff` shows
+no content change, but the working copy differs from a fresh checkout, and git warns "LF will be
+replaced by CRLF" for each file. Reported by the pascal-named-pipes-faa migration (F8), and
+reproduced here 2026-10-04: a CRLF file with no match comes out with no CR.
+
+**Cause.** The `sed` that ships with Git for Windows; not investigated further. The same files
+run through `perl -pi` keep their CRs (measured in the same reproduction).
+
+**Fix.** Use `perl -pi -e` with the same regex (`\b` works; write `$1` instead of `\1`): it keeps
+the line endings. `docs/migrating.md` uses it. If `sed -i` already ran, `git checkout --` the files
+with no real change.
+
+## 4. Delphi: `E2029 Declaration expected but 'FINALIZATION' found`
+
+**Symptom.** A unit with a `finalization` section and no `initialization` compiles on FPC 3.2.2,
+but Delphi rejects it with `E2029 Declaration expected but 'FINALIZATION' found`. Reported by the
+pascal-named-pipes-faa migration (F8), which copied the idea of
+`PascalCommon.ThreadPoolTests`' finalization check into a unit of its own.
+
+**Cause.** Delphi only accepts `finalization` after an `initialization` section. FPC also allows
+it on its own.
+
+**Fix.** Give the unit an `initialization` section, even an empty one. `PascalCommon.ThreadPoolTests`
+has one because it registers its fixture there.
+

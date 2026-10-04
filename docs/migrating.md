@@ -106,14 +106,16 @@ go (plan decision 4).
 | `TOptNullXxx.SafeNullable`, `SafeOptional`, `SafeOptNull` (deprecated) | `TOptionals.Safe` | removed in 0.2.0 |
 | `TOptionalsJsonConverter`, `RegisterOptionalsConverter` | unchanged | |
 
-A rename with `sed`, for pascal-db-faa (check the diff; the other libraries need their own
-prefixes):
+A rename for pascal-db-faa (check the diff; the other libraries need their own prefixes):
 
 ```sh
-sed -i -E 's/\bPascalDb\.(Threading|SystemContext|ClockCache|Optionals|JsonMapper\.Optionals)\b/PascalCommon.\1/g;
-           s/\bPdb(Atomic\w*|Tick(Ms|Us))\b/Pc\1/g;
-           s/pascal_db_faa_jsonmapper/pascal_common_faa_jsonmapper/g' <files>
+perl -pi -e 's/\bPascalDb\.(Threading|SystemContext|ClockCache|Optionals|JsonMapper\.Optionals)\b/PascalCommon.$1/g;
+             s/\bPdb(Atomic\w*|Tick(?:Ms|Us))\b/Pc$1/g;
+             s/pascal_db_faa_jsonmapper/pascal_common_faa_jsonmapper/g' <files>
 ```
+
+Use `perl -pi`, not `sed -i`: in Git Bash on Windows, `sed -i` rewrites every file it is given
+with LF line endings, even the files where nothing matched (gotcha 3). `perl -pi` keeps CRLF.
 
 ## Behavior to know about
 
@@ -124,7 +126,25 @@ sed -i -E 's/\bPascalDb\.(Threading|SystemContext|ClockCache|Optionals|JsonMappe
 - **`PcPool` is shared by every library in the process**, and created in
   `PascalCommon.ThreadPool`'s initialization (the donors created theirs lazily). Its
   `QueueDepth` counts every library's items. Your unit is finalized before
-  `PascalCommon.ThreadPool`, so drain your in-flight items in your own finalization, as before.
+  `PascalCommon.ThreadPool`, so `PcPool` is still alive and still running your items when your
+  finalization frees things. The donors didn't have this problem: each one owned its pool and
+  freed it first, and that ran the whole queue. See the next point.
+- **An object whose work runs on `PcPool` and that you free in your finalization must wait for
+  its own items.** pascal-named-pipes-faa's `PipeGroupDispatcher` (a keyed dispatcher whose
+  drain items run on the global pool) used to be freed after the pool. Freed before `PcPool`,
+  as it is now, a queued drain item called into the freed object, and the items still in its
+  mailboxes were lost (measured in F8: 0 of 15 items run, 6 unfreed blocks). What pipes does
+  now, and what works:
+  - count the items **from the moment they are queued**, not from when they start;
+  - decrement the counter in the work item's **destructor**, not at the end of `Execute`. The
+    destructor also runs when the pool frees an item without running it, and it is the item's
+    last access to the owner;
+  - in the owner's `Destroy`, wait by polling that atomic counter down to 0 (with a deadline).
+    Don't wait on an event the item signals: the item's last act would be a `SetEvent` on an
+    object the waiter may already be freeing.
+
+  See `Pipes.Threading` (`TPipeMailboxDrainWork.Destroy`, `TPipeKeyedDispatcher.Destroy`) in
+  pascal-named-pipes-faa.
 - **`TPcThreadPool.Destroy` runs every queued item before returning.** The donors did the same.
   The Pipes header and test said Destroy discarded the queued items, but it never did.
 - **64-bit atomics wrap around** instead of raising, even with overflow checks on in the

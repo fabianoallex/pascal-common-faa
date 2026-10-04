@@ -6,6 +6,21 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-04
+
+Documentation only: no change to the API or its behavior.
+
+### Changed
+
+- `docs/migrating.md`, from the pascal-named-pipes-faa migration (F8): how an object whose work
+  runs on `PcPool` must wait for its own items before being freed in the consumer's finalization
+  (the old "drain as before" didn't hold for a dispatcher); the rename recipe uses `perl -pi`,
+  because `sed -i` turns CRLF into LF on Git for Windows.
+- README: the verified platforms, and Delphi Android (ARM) as a target compiled by a consumer but
+  not run yet.
+- `docs/gotchas.md`: gotchas 3 (`sed -i` and CRLF) and 4 (Delphi rejects `finalization` without
+  `initialization`).
+
 ## [1.0.0] - 2026-10-04
 
 The API is now stable: within 1.x, releases only add (no rename, no signature change, no
@@ -60,7 +75,8 @@ First release: the code shared by the `*-faa` libraries, moved here from their o
 - `README.md` and `docs/migrating.md` (moving a library off its own copy: units, name map,
   behavior differences).
 
-[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/fabianoallex/pascal-common-faa/releases/tag/v0.1.0
