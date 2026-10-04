@@ -486,7 +486,7 @@ var
   NilRef: INullGuid;
 begin
   NilRef := nil;
-  R := TOptNullGuid.SafeNullable(NilRef); // TOptionals.Safe(INullGuid(nil));
+  R := TOptionals.Safe(NilRef);
   TAssert.AssertTrue(R.IsNull);
 end;
 

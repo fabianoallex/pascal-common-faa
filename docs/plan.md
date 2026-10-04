@@ -128,7 +128,7 @@ translate and rewrite in the `TAssert` dialect).
 | F4 | here | jsonmapper bridge + submodule + tests | idem; CI checks out submodules — **FPC done 2026-10-04**: 120/120 (15 bridge tests, as in pascal-db-faa), 0 leaks on Windows x64, Linux x86_64 and i386 (the mapper builds on FPC i386 too); mapper v0.2.0 as submodule; the workflow already had `submodules: true`. Delphi 12 CE Win32 and Win64: 120/120, 0 leaks |
 | F5 | here | README, `docs/migrating.md` (name map), CHANGELOG, release 0.1.0 | tag pushed (ask first) — **docs done 2026-10-04** (the README example compiled and run on FPC); `PascalCommon.Version` and both `.lpk` were already 0.1.0. Tag `v0.1.0` pushed |
 | F6 | pascal-db-faa | Pilot: drop the moved units, `external/pascal-common-faa`, version check, `Pdb*` → `Pc*` | unit suite + the 12 integration combinations + samples green; findings fed back here |
-| F7 | here | Fixes from the pilot; release 1.0.0 | |
+| F7 | here | Fixes from the pilot; release 1.0.0 | Already in (2026-10-04, after 0.1.0): the deprecated `TOptNullXxx.Safe*` removed, their logic moved into `TOptionals.Safe` |
 | F8 | pipes, amqp, redis | Each one migrates in its own session | each library's own suites green |
 
 ## Name map

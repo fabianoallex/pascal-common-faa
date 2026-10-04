@@ -65,6 +65,7 @@ go (plan decision 4).
 | `IClock`/`TClock`, `ITicker`/`TTicker`, `ISleep`/`TSleep` | unchanged | see "Name clash" below |
 | `TClockCache`, `TCacheHitRate`, `TCacheStats`, `TAdmissionPolicy` | unchanged | |
 | `IOptXxx`, `INullXxx`, `IOptNullXxx`, `TOptNullXxx`, `TOptionals` | unchanged | |
+| `TOptNullXxx.SafeNullable`, `SafeOptional`, `SafeOptNull` (deprecated) | `TOptionals.Safe` | removed after 0.1.0 |
 | `TOptionalsJsonConverter`, `RegisterOptionalsConverter` | unchanged | |
 
 A rename with `sed`, for pascal-db-faa (check the diff; the other libraries need their own

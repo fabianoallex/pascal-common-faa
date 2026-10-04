@@ -6,6 +6,11 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+### Removed
+
+- The deprecated `TOptNullXxx.SafeNullable`, `SafeOptional` and `SafeOptNull` (27 methods, 3 per
+  type), inherited from pascal-db-faa. Use `TOptionals.Safe`, which now holds their logic.
+
 ## [0.1.0] - 2026-10-04
 
 First release: the code shared by the `*-faa` libraries, moved here from their own copies.

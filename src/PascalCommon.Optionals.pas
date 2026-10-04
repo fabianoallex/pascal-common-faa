@@ -301,9 +301,6 @@ type
     class function Null: TOptNullString; static;
     class function Undefined: TOptNullString; static;
     class function From(AValue: string): TOptNullString; static;
-    class function SafeNullable(AValue: INullString): INullString; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptional(AValue: IOptString): IOptString; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptNull(AValue: IOptNullString): IOptNullString; deprecated 'Use TOptionals.Safe instead'; static;
   end;
 
   { TOptNullInteger }
@@ -327,9 +324,6 @@ type
     class function Null: TOptNullInteger; static;
     class function Undefined: TOptNullInteger; static;
     class function From(AValue: Integer): TOptNullInteger; static;
-    class function SafeNullable(AValue: INullInteger): INullInteger; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptional(AValue: IOptInteger): IOptInteger; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptNull(AValue: IOptNullInteger): IOptNullInteger; deprecated 'Use TOptionals.Safe instead'; static;
   end;
 
   { TOptNullInt64 }
@@ -353,9 +347,6 @@ type
     class function Null: TOptNullInt64; static;
     class function Undefined: TOptNullInt64; static;
     class function From(AValue: Int64): TOptNullInt64; static;
-    class function SafeNullable(AValue: INullInt64): INullInt64; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptional(AValue: IOptInt64): IOptInt64; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptNull(AValue: IOptNullInt64): IOptNullInt64; deprecated 'Use TOptionals.Safe instead'; static;
   end;
 
   { TOptNullSingle }
@@ -387,9 +378,6 @@ type
     class function Null: TOptNullSingle; static;
     class function Undefined: TOptNullSingle; static;
     class function From(AValue: Single; ADecimalPlaces: Integer=-1): TOptNullSingle; static;
-    class function SafeNullable(AValue: INullSingle): INullSingle; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptional(AValue: IOptSingle): IOptSingle; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptNull(AValue: IOptNullSingle): IOptNullSingle; deprecated 'Use TOptionals.Safe instead'; static;
   end;
 
   { TOptNullDouble }
@@ -421,9 +409,6 @@ type
     class function Null: TOptNullDouble; static;
     class function Undefined: TOptNullDouble; static;
     class function From(AValue: Double; ADecimalPlaces: Integer=-1): TOptNullDouble; static;
-    class function SafeNullable(AValue: INullDouble): INullDouble; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptional(AValue: IOptDouble): IOptDouble; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptNull(AValue: IOptNullDouble): IOptNullDouble; deprecated 'Use TOptionals.Safe instead'; static;
   end;
 
   { TOptNullDateTime }
@@ -447,9 +432,6 @@ type
     class function Null: TOptNullDateTime; static;
     class function Undefined: TOptNullDateTime; static;
     class function From(AValue: TDateTime): TOptNullDateTime; static;
-    class function SafeNullable(AValue: INullDateTime): INullDateTime; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptional(AValue: IOptDateTime): IOptDateTime; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptNull(AValue: IOptNullDateTime): IOptNullDateTime; deprecated 'Use TOptionals.Safe instead'; static;
   end;
 
   { TOptNullBoolean }
@@ -469,9 +451,6 @@ type
     class function TrueValue: TOptNullBoolean; static;
     class function FalseValue: TOptNullBoolean; static;
     class function From(AValue: Boolean): IOptNullBoolean; static;
-    class function SafeNullable(AValue: INullBoolean): INullBoolean; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptional(AValue: IOptBoolean): IOptBoolean; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptNull(AValue: IOptNullBoolean): IOptNullBoolean; deprecated 'Use TOptionals.Safe instead'; static;
   end;
 
   { TOptNullGuid }
@@ -493,9 +472,6 @@ type
     class function Null: TOptNullGuid; static;
     class function Undefined: TOptNullGuid; static;
     class function From(AValue: TGUID): TOptNullGuid; static;
-    class function SafeNullable(AValue: INullGuid): INullGuid; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptional(AValue: IOptGuid): IOptGuid; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptNull(AValue: IOptNullGuid): IOptNullGuid; deprecated 'Use TOptionals.Safe instead'; static;
   end;
 
   { TOptNullCurrency }
@@ -517,9 +493,6 @@ type
     class function Null: TOptNullCurrency; static;
     class function Undefined: TOptNullCurrency; static;
     class function From(AValue: Currency): TOptNullCurrency; static;
-    class function SafeNullable(AValue: INullCurrency): INullCurrency; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptional(AValue: IOptCurrency): IOptCurrency; deprecated 'Use TOptionals.Safe instead'; static;
-    class function SafeOptNull(AValue: IOptNullCurrency): IOptNullCurrency; deprecated 'Use TOptionals.Safe instead'; static;
   end;
 
 implementation
@@ -570,137 +543,218 @@ end;
 
 class function TOptionals.Safe(const AValue: IOptString): IOptString;
 begin
-  Result := TOptNullString.SafeOptional(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullString.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: INullString): INullString;
 begin
-  Result := TOptNullString.SafeNullable(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullString.Null;
 end;
 
 class function TOptionals.Safe(const AValue: IOptNullString): IOptNullString;
 begin
-  Result := TOptNullString.SafeOptNull(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullString.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: IOptInteger): IOptInteger;
 begin
-  Result := TOptNullInteger.SafeOptional(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullInteger.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: INullInteger): INullInteger;
 begin
-  Result := TOptNullInteger.SafeNullable(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullInteger.Null;
 end;
 
 class function TOptionals.Safe(const AValue: IOptNullInteger): IOptNullInteger;
 begin
-  Result := TOptNullInteger.SafeOptNull(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullInteger.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: IOptInt64): IOptInt64;
 begin
-  Result := TOptNullInt64.SafeOptional(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullInt64.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: INullInt64): INullInt64;
 begin
-  Result := TOptNullInt64.SafeNullable(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullInt64.Null;
 end;
 
 class function TOptionals.Safe(const AValue: IOptNullInt64): IOptNullInt64;
 begin
-  Result := TOptNullInt64.SafeOptNull(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullInt64.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: IOptSingle): IOptSingle;
 begin
-  Result := TOptNullSingle.SafeOptional(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullSingle.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: INullSingle): INullSingle;
 begin
-  Result := TOptNullSingle.SafeNullable(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullSingle.Null;
 end;
 
 class function TOptionals.Safe(const AValue: IOptNullSingle): IOptNullSingle;
 begin
-  Result := TOptNullSingle.SafeOptNull(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullSingle.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: IOptDouble): IOptDouble;
 begin
-  Result := TOptNullDouble.SafeOptional(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullDouble.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: INullDouble): INullDouble;
 begin
-  Result := TOptNullDouble.SafeNullable(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullDouble.Null;
 end;
 
 class function TOptionals.Safe(const AValue: IOptNullDouble): IOptNullDouble;
 begin
-  Result := TOptNullDouble.SafeOptNull(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullDouble.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: IOptDateTime): IOptDateTime;
 begin
-  Result := TOptNullDateTime.SafeOptional(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullDateTime.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: INullDateTime): INullDateTime;
 begin
-  Result := TOptNullDateTime.SafeNullable(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullDateTime.Null;
 end;
 
 class function TOptionals.Safe(const AValue: IOptNullDateTime): IOptNullDateTime;
 begin
-  Result := TOptNullDateTime.SafeOptNull(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullDateTime.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: IOptBoolean): IOptBoolean;
 begin
-  Result := TOptNullBoolean.SafeOptional(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullBoolean.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: INullBoolean): INullBoolean;
 begin
-  Result := TOptNullBoolean.SafeNullable(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullBoolean.Null;
 end;
 
 class function TOptionals.Safe(const AValue: IOptNullBoolean): IOptNullBoolean;
 begin
-  Result := TOptNullBoolean.SafeOptNull(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullBoolean.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: IOptGuid): IOptGuid;
 begin
-  Result := TOptNullGuid.SafeOptional(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullGuid.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: INullGuid): INullGuid;
 begin
-  Result := TOptNullGuid.SafeNullable(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullGuid.Null;
 end;
 
 class function TOptionals.Safe(const AValue: IOptNullGuid): IOptNullGuid;
 begin
-  Result := TOptNullGuid.SafeOptNull(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullGuid.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: IOptCurrency): IOptCurrency;
 begin
-  Result := TOptNullCurrency.SafeOptional(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullCurrency.Undefined;
 end;
 
 class function TOptionals.Safe(const AValue: INullCurrency): INullCurrency;
 begin
-  Result := TOptNullCurrency.SafeNullable(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullCurrency.Null;
 end;
 
 class function TOptionals.Safe(const AValue: IOptNullCurrency): IOptNullCurrency;
 begin
-  Result := TOptNullCurrency.SafeOptNull(AValue);
+  if Assigned(AValue) then
+    Result := AValue
+  else
+    Result := TOptNullCurrency.Undefined;
 end;
 
 { TOptionalNullableBase }
@@ -793,30 +847,6 @@ begin
   Result := Obj as TOptNullString;
 end;
 
-class function TOptNullString.SafeNullable(AValue: INullString): INullString;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullString.Null;
-end;
-
-class function TOptNullString.SafeOptional(AValue: IOptString): IOptString;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullString.Undefined;
-end;
-
-class function TOptNullString.SafeOptNull(AValue: IOptNullString): IOptNullString;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullString.Undefined;
-end;
-
 { TOptNullInteger }
 
 class destructor TOptNullInteger.Destroy;
@@ -874,30 +904,6 @@ begin
   Result := Obj as TOptNullInteger;
 end;
 
-class function TOptNullInteger.SafeNullable(AValue: INullInteger): INullInteger;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullInteger.Null;
-end;
-
-class function TOptNullInteger.SafeOptional(AValue: IOptInteger): IOptInteger;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullInteger.Undefined;
-end;
-
-class function TOptNullInteger.SafeOptNull(AValue: IOptNullInteger): IOptNullInteger;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullInteger.Undefined;
-end;
-
 { TOptNullInt64 }
 
 class constructor TOptNullInt64.Create;
@@ -953,30 +959,6 @@ begin
   end;
 
   Result := Obj as TOptNullInt64;
-end;
-
-class function TOptNullInt64.SafeNullable(AValue: INullInt64): INullInt64;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullInt64.Null;
-end;
-
-class function TOptNullInt64.SafeOptional(AValue: IOptInt64): IOptInt64;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullInt64.Undefined;
-end;
-
-class function TOptNullInt64.SafeOptNull(AValue: IOptNullInt64): IOptNullInt64;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullInt64.Undefined;
 end;
 
 { TOptNullSingle }
@@ -1052,30 +1034,6 @@ begin
   Result := Obj as TOptNullSingle;
 end;
 
-class function TOptNullSingle.SafeNullable(AValue: INullSingle): INullSingle;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullSingle.Null;
-end;
-
-class function TOptNullSingle.SafeOptional(AValue: IOptSingle): IOptSingle;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullSingle.Undefined;
-end;
-
-class function TOptNullSingle.SafeOptNull(AValue: IOptNullSingle): IOptNullSingle;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullSingle.Undefined;
-end;
-
 { TOptNullDouble }
 
 class operator TOptNullDouble.TCacheKey.Equal(const A, B: TCacheKey): Boolean;
@@ -1148,30 +1106,6 @@ begin
   Result := Obj as TOptNullDouble;
 end;
 
-class function TOptNullDouble.SafeNullable(AValue: INullDouble): INullDouble;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullDouble.Null;
-end;
-
-class function TOptNullDouble.SafeOptional(AValue: IOptDouble): IOptDouble;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullDouble.Undefined;
-end;
-
-class function TOptNullDouble.SafeOptNull(AValue: IOptNullDouble): IOptNullDouble;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullDouble.Undefined;
-end;
-
 { TOptNullDateTime }
 
 class destructor TOptNullDateTime.Destroy;
@@ -1236,30 +1170,6 @@ begin
     Result := GetFromCache(FGlobalCacheTime, FLockCacheTime);
 end;
 
-class function TOptNullDateTime.SafeNullable(AValue: INullDateTime): INullDateTime;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullDateTime.Null;
-end;
-
-class function TOptNullDateTime.SafeOptional(AValue: IOptDateTime): IOptDateTime;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullDateTime.Undefined;
-end;
-
-class function TOptNullDateTime.SafeOptNull(AValue: IOptNullDateTime): IOptNullDateTime;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullDateTime.Undefined;
-end;
-
 { TOptNullBoolean }
 
 class destructor TOptNullBoolean.Destroy;
@@ -1286,30 +1196,6 @@ end;
 class function TOptNullBoolean.Undefined: TOptNullBoolean;
 begin
   Result := FGlobalUndefined as TOptNullBoolean;
-end;
-
-class function TOptNullBoolean.SafeNullable(AValue: INullBoolean): INullBoolean;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullBoolean.Null;
-end;
-
-class function TOptNullBoolean.SafeOptional(AValue: IOptBoolean): IOptBoolean;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullBoolean.Undefined;
-end;
-
-class function TOptNullBoolean.SafeOptNull(AValue: IOptNullBoolean): IOptNullBoolean;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullBoolean.Undefined;
 end;
 
 class function TOptNullBoolean.TrueValue: TOptNullBoolean;
@@ -1381,30 +1267,6 @@ begin
   Result := Obj as TOptNullGuid;
 end;
 
-class function TOptNullGuid.SafeNullable(AValue: INullGuid): INullGuid;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullGuid.Null;
-end;
-
-class function TOptNullGuid.SafeOptional(AValue: IOptGuid): IOptGuid;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullGuid.Undefined;
-end;
-
-class function TOptNullGuid.SafeOptNull(AValue: IOptNullGuid): IOptNullGuid;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullGuid.Undefined;
-end;
-
 { TOptNullCurrency }
 
 class destructor TOptNullCurrency.Destroy;
@@ -1454,30 +1316,6 @@ begin
   end;
 
   Result := Obj as TOptNullCurrency;
-end;
-
-class function TOptNullCurrency.SafeNullable(AValue: INullCurrency): INullCurrency;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullCurrency.Null;
-end;
-
-class function TOptNullCurrency.SafeOptional(AValue: IOptCurrency): IOptCurrency;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullCurrency.Undefined;
-end;
-
-class function TOptNullCurrency.SafeOptNull(AValue: IOptNullCurrency): IOptNullCurrency;
-begin
-  if Assigned(AValue) then
-    Result := AValue
-  else
-    Result := TOptNullCurrency.Undefined;
 end;
 
 end.
