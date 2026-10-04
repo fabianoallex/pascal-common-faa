@@ -6,6 +6,10 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-04
+
+First release: the code shared by the `*-faa` libraries, moved here from their own copies.
+
 ### Added
 
 - Project skeleton: `pascalcommon.inc`, Lazarus package `pascal_common_faa.lpk`, DUnitX and
@@ -31,3 +35,8 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
   `pascal_common_faa_jsonmapper.lpk`): the pascal-jsonmapper-faa converter for the optional
   types, moved from pascal-db-faa with its tests. pascal-jsonmapper-faa v0.2.0 is a submodule in
   `external/`, used by the tests only.
+- `README.md` and `docs/migrating.md` (moving a library off its own copy: units, name map,
+  behavior differences).
+
+[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/fabianoallex/pascal-common-faa/releases/tag/v0.1.0

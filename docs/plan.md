@@ -126,19 +126,12 @@ translate and rewrite in the `TAssert` dialect).
 | F2 | here | `SystemContext`, `ClockCache`, `Optionals` + their tests | idem — **FPC done 2026-10-04**: 97/97 (ClockCache 12 and Optionals 65, same counts as pascal-db-faa, plus 5 new SystemContext tests), 0 leaks on Windows x64, Linux x86_64 and i386; 40 runs green at `--cpus=1`. Delphi 12 CE Win32 and Win64: 97/97, 0 leaks |
 | F3 | here | `PascalCommon.ThreadPool` (monitor + pool, eager global pool) + ported tests | idem — **FPC done 2026-10-04**: 105/105 (8 new ThreadPool tests), 0 leaks on Windows x64, Linux x86_64 and i386; 40 runs green at `--cpus=1`. Delphi 12 CE Win32 and Win64: 105/105, 0 leaks, finalization check silent |
 | F4 | here | jsonmapper bridge + submodule + tests | idem; CI checks out submodules — **FPC done 2026-10-04**: 120/120 (15 bridge tests, as in pascal-db-faa), 0 leaks on Windows x64, Linux x86_64 and i386 (the mapper builds on FPC i386 too); mapper v0.2.0 as submodule; the workflow already had `submodules: true`. Delphi 12 CE Win32 and Win64: 120/120, 0 leaks |
-| F5 | here | README, `docs/migrating.md` (name map), CHANGELOG, release 0.1.0 | tag pushed (ask first) |
+| F5 | here | README, `docs/migrating.md` (name map), CHANGELOG, release 0.1.0 | tag pushed (ask first) — **docs done 2026-10-04** (the README example compiled and run on FPC); `PascalCommon.Version` and both `.lpk` were already 0.1.0. Tag `v0.1.0` pushed |
 | F6 | pascal-db-faa | Pilot: drop the moved units, `external/pascal-common-faa`, version check, `Pdb*` → `Pc*` | unit suite + the 12 integration combinations + samples green; findings fed back here |
 | F7 | here | Fixes from the pilot; release 1.0.0 | |
 | F8 | pipes, amqp, redis | Each one migrates in its own session | each library's own suites green |
 
-## Name map (for `docs/migrating.md`)
+## Name map
 
-| Before | After |
-|---|---|
-| `PascalDb.Threading`, `Pipes.Threading`, `AMQP.Threading`, `Redis.Threading` (atomics, ticks) | `PascalCommon.Threading` |
-| `PdbAtomicInc`, `PipeAtomicInc`, `AmqpAtomicInc`, `RedisAtomicInc`... | `PcAtomicInc`... |
-| `PdbTickMs`, `PipeTickMs`... / `PdbTickUs` | `PcTickMs` / `PcTickUs` |
-| `TPipeMonitor`, `TAMQPMonitor`, `TRedisMonitor` | `TPcMonitor` (`PascalCommon.ThreadPool`) |
-| `TPipeWorkItem`, `TPipeThreadPool`, `PipePool` (and AMQP/Redis) | `TPcWorkItem`, `TPcThreadPool`, `PcPool` |
-| `PascalDb.SystemContext`, `PascalDb.ClockCache`, `PascalDb.Optionals` | `PascalCommon.SystemContext`, `.ClockCache`, `.Optionals` |
-| `PascalDb.JsonMapper.Optionals`, `pascal_db_faa_jsonmapper.lpk` | `PascalCommon.JsonMapper.Optionals`, `pascal_common_faa_jsonmapper.lpk` |
+Moved to [`migrating.md`](migrating.md) in F5, together with the steps for a library and the
+behavior differences.
