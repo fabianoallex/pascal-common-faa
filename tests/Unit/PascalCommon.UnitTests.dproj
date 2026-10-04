@@ -116,8 +116,14 @@
         <DCCReference Include="..\..\src\PascalCommon.Version.pas"/>
         <DCCReference Include="PascalCommon.DUnitXCompat.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Threading.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.SystemContext.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.ClockCache.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.Optionals.pas"/>
         <DCCReference Include="PascalCommon.VersionTests.pas"/>
         <DCCReference Include="PascalCommon.ThreadingTests.pas"/>
+        <DCCReference Include="PascalCommon.SystemContextTests.pas"/>
+        <DCCReference Include="PascalCommon.ClockCacheTests.pas"/>
+        <DCCReference Include="PascalCommon.OptionalsTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

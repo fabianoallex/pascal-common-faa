@@ -70,6 +70,11 @@ without converting every field.
       `$IF`, and the fatal message aborts with the text given. Delphi documents the same
       (constant expressions in `$IF`); to be confirmed in the IDE with the version test;
    4. keep the library small (decision 2).
+7. **SystemContext and ClockCache keep their names** (`TClock`, `TTicker`, `TSleep`, `IClock`...,
+   `TClockCache`, `TCacheHitRate`...), as the optionals do, instead of the `TPc*` prefix. Decided
+   2026-10-04 in F2. Known cost: delphi-api-infra-faa's `Common.SystemContext` and
+   `Common.ClockCache` declare the same names, so an application using both must qualify them
+   (the unit listed last in `uses` wins otherwise); noted in the unit header.
 
 ## What comes in, and from where
 
@@ -111,7 +116,7 @@ translate and rewrite in the `TAssert` dialect).
 |---|---|---|---|
 | F0 | here | Skeleton: `.inc`, package, `PascalCommon.Version` + test, DUnitX and FPCUnit runners, mirror generator, scripts, CI | FPC suite green with 0 leaks — **done 2026-10-04** on Windows (`tools/test_fpc.sh`) and Linux (`tools/ci-test.sh`); the version check measured to abort the build when the minimum is raised (FPC). Delphi 12 CE Win32 and Win64: 2/2, 0 leaks (the `$IF` on a constant from another unit compiles there; the abort path was only measured on FPC). Committed as `b774354`, public at https://github.com/fabianoallex/pascal-common-faa, GitHub CI green (run 37221548830) |
 | F1 | here | `PascalCommon.Threading` (atomics + ticks, merged) with tests | FPC and Delphi green, 0 leaks — **FPC done 2026-10-04**: 15/15, 0 leaks on Windows x64, Linux x86_64 and Linux i386; 40 runs green at `--cpus=1` with 8 containers at once. Delphi 12 CE Win32 and Win64: 15/15, 0 leaks |
-| F2 | here | `SystemContext`, `ClockCache`, `Optionals` + their tests | idem |
+| F2 | here | `SystemContext`, `ClockCache`, `Optionals` + their tests | idem — **FPC done 2026-10-04**: 97/97 (ClockCache 12 and Optionals 65, same counts as pascal-db-faa, plus 5 new SystemContext tests), 0 leaks on Windows x64, Linux x86_64 and i386; 40 runs green at `--cpus=1`. Delphi 12 CE Win32 and Win64: 97/97, 0 leaks |
 | F3 | here | `PascalCommon.ThreadPool` (monitor + pool, eager global pool) + ported tests | idem |
 | F4 | here | jsonmapper bridge + submodule + tests | idem; CI checks out submodules |
 | F5 | here | README, `docs/migrating.md` (name map), CHANGELOG, release 0.1.0 | tag pushed (ask first) |

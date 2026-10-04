@@ -25,7 +25,10 @@ uses
   {$ENDIF}
   Classes, consoletestrunner, testregistry,
   PascalCommon.VersionTests,
-  PascalCommon.ThreadingTests;
+  PascalCommon.ThreadingTests,
+  PascalCommon.SystemContextTests,
+  PascalCommon.ClockCacheTests,
+  PascalCommon.OptionalsTests;
 
 var
   ConsoleApp: TTestRunner;

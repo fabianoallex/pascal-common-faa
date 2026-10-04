@@ -19,3 +19,7 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
   `PascalDb.Threading` and the shared part of `Pipes/AMQP/Redis.Threading`. On FPC for 32-bit
   CPUs the 64-bit atomics go through a lock (FPC 3.2.2 has no 64-bit `InterLocked*` there;
   gotcha 1).
+- `PascalCommon.SystemContext` (`TClock`, `TTicker`, `TSleep` and their interfaces),
+  `PascalCommon.ClockCache` (`TClockCache<K, V>`) and `PascalCommon.Optionals` (`IOptXxx`,
+  `INullXxx`, `IOptNullXxx`, `TOptionals`), moved from pascal-db-faa with their names unchanged,
+  together with their tests. New: a test fixture of its own for `SystemContext`.

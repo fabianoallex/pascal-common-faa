@@ -29,6 +29,18 @@
         <Filename Value="..\src\PascalCommon.Threading.pas"/>
         <UnitName Value="PascalCommon.Threading"/>
       </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.SystemContext.pas"/>
+        <UnitName Value="PascalCommon.SystemContext"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.ClockCache.pas"/>
+        <UnitName Value="PascalCommon.ClockCache"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Optionals.pas"/>
+        <UnitName Value="PascalCommon.Optionals"/>
+      </Item>
     </Files>
     <RequiredPkgs>
       <Item>

@@ -18,8 +18,14 @@ uses
   PascalCommon.Version in '..\..\src\PascalCommon.Version.pas',
   PascalCommon.DUnitXCompat in 'PascalCommon.DUnitXCompat.pas',
   PascalCommon.Threading in '..\..\src\PascalCommon.Threading.pas',
+  PascalCommon.SystemContext in '..\..\src\PascalCommon.SystemContext.pas',
+  PascalCommon.ClockCache in '..\..\src\PascalCommon.ClockCache.pas',
+  PascalCommon.Optionals in '..\..\src\PascalCommon.Optionals.pas',
   PascalCommon.VersionTests in 'PascalCommon.VersionTests.pas',
-  PascalCommon.ThreadingTests in 'PascalCommon.ThreadingTests.pas';
+  PascalCommon.ThreadingTests in 'PascalCommon.ThreadingTests.pas',
+  PascalCommon.SystemContextTests in 'PascalCommon.SystemContextTests.pas',
+  PascalCommon.ClockCacheTests in 'PascalCommon.ClockCacheTests.pas',
+  PascalCommon.OptionalsTests in 'PascalCommon.OptionalsTests.pas';
 
 var
   runner: ITestRunner;

@@ -8,7 +8,8 @@ unit pascal_common_faa;
 interface
 
 uses
-  PascalCommon.Version, PascalCommon.Threading;
+  PascalCommon.Version, PascalCommon.Threading, PascalCommon.SystemContext,
+  PascalCommon.ClockCache, PascalCommon.Optionals;
 
 implementation
 
