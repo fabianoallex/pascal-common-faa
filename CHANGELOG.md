@@ -6,6 +6,20 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-04
+
+Documentation only: no change to the API or its behavior.
+
+### Changed
+
+- `docs/migrating.md`, from the pascal-redis-faa migration (F8): in a VCL/LCL application, a form
+  that queues work on `PcPool` must wait for its items in `OnCloseQuery`, pumping
+  `CheckSynchronize`, because `Application` frees forms before any unit finalization (measured
+  on LCL); step 7 asks to see heaptrc's `0 unfreed memory blocks` in its log file and to check
+  heaptrc is on; step 3 mentions the `packagefiles.xml` lazbuild leaves behind.
+  `PascalCommon.ThreadPool`'s header says the same about GUI applications (comment only).
+- `docs/gotchas.md`: gotcha 6 (`packagefiles.xml` on a broken dependency).
+
 ## [1.1.0] - 2026-10-04
 
 ### Added
@@ -91,7 +105,8 @@ First release: the code shared by the `*-faa` libraries, moved here from their o
 - `README.md` and `docs/migrating.md` (moving a library off its own copy: units, name map,
   behavior differences).
 
-[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.2.0...v1.0.0

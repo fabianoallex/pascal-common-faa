@@ -46,7 +46,15 @@ unit PascalCommon.ThreadPool;
   a consumer drains its own in-flight items (the tests check it on both
   compilers, in PascalCommon.ThreadPoolTests' finalization). Items still
   running after that keep running until PcPool joins them, so they must not
-  touch anything their unit's finalization already freed. }
+  touch anything their unit's finalization already freed.
+
+  In a VCL or LCL application there is an earlier point: Application frees
+  its forms and data modules in an exit procedure, before ANY unit
+  finalization (measured on LCL in the pascal-redis-faa migration; read in
+  Vcl.Forms' source). A form that queues work on PcPool must wait for its
+  own items in OnCloseQuery, while it is still whole, pumping
+  CheckSynchronize so the items' TThread.Queue calls can run; see
+  docs/migrating.md. }
 
 interface
 

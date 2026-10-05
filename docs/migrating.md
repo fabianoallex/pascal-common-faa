@@ -27,7 +27,10 @@ go (plan decision 4).
    `pascal_common_faa` **first**, with `DefaultFilename` into
    `external/pascal-common-faa/packages/` and `Prefer="True"`; the library's package resolves to
    the copy already loaded. Without `Prefer`, a `pascal_common_faa.lpk` registered in the IDE
-   wins over the `DefaultFilename`. On Delphi, add `external/pascal-common-faa/src` to the test
+   wins over the `DefaultFilename`. Building the library's `.lpk` alone with lazbuild fails until
+   `pascal_common_faa.lpk` is registered (by design), and leaves a `packagefiles.xml` in the
+   current folder (gotcha 6): register it first, and ignore `/packagefiles.xml`. On Delphi, add
+   `external/pascal-common-faa/src` to the test
    projects' search path.
 4. **If the library uses the JSON bridge,** each project that uses it also requires the mapper
    itself, before the bridge:
@@ -66,7 +69,11 @@ go (plan decision 4).
 6. **CI:** check out submodules without `recursive`. pascal-common-faa has its own
    `external/pascal-jsonmapper-faa`, used only by its own tests. A library that also uses the
    mapper keeps its own copy and builds the bridge against that one (step 4).
-7. **Run every suite** (unit, integration, samples) on both compilers, with 0 leaks.
+7. **Run every suite** (unit, integration, samples) on both compilers, with 0 leaks. On FPC,
+   "0 leaks" means you **saw** the `0 unfreed memory blocks` line, in the heaptrc file
+   (`HEAPTRC="log=<file>"`, gotcha 5), not that no leak line appeared. Check first that heaptrc
+   is on at all (`-gh`, or `UseHeaptrc` in the `.lpi`): pascal-redis-faa's test projects never
+   had it, so its FPC leaks had never been measured before its migration.
 
 ## Units
 
@@ -156,6 +163,25 @@ with LF line endings, even the files where nothing matched (gotcha 3). `perl -pi
 
   See `Pipes.Threading` (`TPipeMailboxDrainWork.Destroy`, `TPipeKeyedDispatcher.Destroy`) in
   pascal-named-pipes-faa.
+- **In a VCL or LCL application, a form or data module that queues work on `PcPool` must wait
+  for its own items in `OnCloseQuery`.** `Application` frees its forms in an exit procedure,
+  before every unit finalization, so waiting in a finalization is already too late for them.
+  Measured in the pascal-redis-faa migration (F8) on LCL: the form was destroyed before the first
+  unit finalization, and all three of its queued items ran afterwards against the freed form. One
+  of redis's GUI samples woke a stream consumer 2.6 s after `FormDestroy`, silently: exit code 0,
+  and heaptrc doesn't flag a use after free. The VCL does the same (`Vcl.Forms`'
+  `DoneApplication`, read in the source). This is not new with pascal-common-faa: the donors'
+  pools were also freed in a unit finalization. What redis does now, on top of the counter
+  pattern above:
+  - each work item counts itself on the form from its constructor (UI thread, before `Queue`) to
+    its destructor, and `OnCloseQuery` waits for the counter to reach 0;
+  - while waiting, pump `CheckSynchronize(10)` instead of `Sleep(10)`. The items post
+    `TThread.Queue` calls as they finish, and nobody runs those after the message loop. On Delphi
+    they also leak: `DoneThreadSynchronization` doesn't free what is left in the queue;
+  - a work item never reads a control. On LCL, reading `TEdit.Text` from a worker is a
+    cross-thread `SendMessage` to the UI thread, and that is the thread waiting for the item.
+
+  See `docs/DECISOES.md` §50 in pascal-redis-faa.
 - **`TPcThreadPool.Destroy` runs every queued item before returning.** The donors did the same.
   The Pipes header and test, and amqp's `AMQP.Server.Queue` header, said Destroy discarded the
   queued items, but it never did. Only an item queued **after** `Destroy` has started is freed

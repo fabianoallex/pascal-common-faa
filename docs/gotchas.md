@@ -84,3 +84,18 @@ written there. Not investigated further.
 **Fix.** Run with `HEAPTRC="log=<file>"` and check the file for `0 unfreed memory blocks`, as
 `tools/test_fpc_docker.sh` does. A check that only greps the console output passes on a leak.
 
+## 6. lazbuild leaves a `packagefiles.xml` in the current folder
+
+**Symptom.** `lazbuild <library>.lpk` run from a library's root fails with
+`Broken dependency: <library> ...->pascal_common_faa (>=1.0)`, and a `packagefiles.xml` appears in
+the current folder. Reported by the pascal-redis-faa migration (F8), reproduced there in an empty
+folder; building a `.lpi` that resolves every package doesn't write it.
+
+**Cause.** The library's `.lpk` requires `pascal_common_faa` by name only (`docs/migrating.md`,
+step 3), so building it alone can't resolve it until the package is registered. On that broken
+dependency, lazbuild writes a copy of the user's package links to the current folder.
+
+**Fix.** Register `pascal_common_faa.lpk` in the IDE (or build through a test `.lpi` that lists it
+with `Prefer="True"`), and add `/packagefiles.xml` to `.gitignore`. This repository's
+`.gitignore` has it, and pipes, amqp and redis do too.
+
