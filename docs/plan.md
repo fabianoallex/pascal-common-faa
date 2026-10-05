@@ -130,6 +130,41 @@ translate and rewrite in the `TAssert` dialect).
 | F6 | pascal-db-faa | **Done 2026-10-04: pascal-db-faa v0.9.0 released on pascal-common-faa 1.0.0.** Findings received 2026-10-04 (pilot against v0.2.0, pascal-db-faa change unreleased, in its `[Unreleased]` as breaking): version bump (solved by 0.2.0), the bridge `.lpk` pointing into an unchecked-out submodule (gotcha 2), and two gaps in `migrating.md` (how to require the package, where the version check goes). Pilot: drop the moved units, `external/pascal-common-faa`, version check, `Pdb*` → `Pc*` | unit suite + the 12 integration combinations + samples green; findings fed back here |
 | F7 | here | Fixes from the pilot; release 1.0.0 | Already in, released as 0.2.0 (2026-10-04) for the pilot to point at: the deprecated `TOptNullXxx.Safe*` removed, their logic moved into `TOptionals.Safe`. Pilot findings fixed 2026-10-04 (unreleased): bridge `.lpk` requires the mapper by name, test `.lpi` prefers the submodule copies, `migrating.md` steps 3–5. **Released 1.0.0 (2026-10-04)** |
 | F8 | pipes, amqp, redis | Each one migrates in its own session | each library's own suites green — **pipes done 2026-10-04** (pascal-named-pipes-faa v0.1.0, on pascal-common-faa v1.0.0): unit 137/137 and integration 139/139, 0 leaks, on FPC Windows/Linux and Delphi Win32/Win64; its Android project compiles. Its findings went into `migrating.md` (an owner of pool work must wait for its own items; `perl -pi` instead of `sed -i`), the README (platforms) and gotchas 3 and 4, released as 1.0.1. **amqp done 2026-10-04** (pascal-amqp-faa v0.1.0, on v1.0.1): unit 121, integration 28, server 459/463, acceptance 28, 0 leaks, on FPC Windows/Linux and Delphi Win32 (Win64 never built in amqp, unrelated to the migration); its broker now has a pool of its own. Its findings went into `migrating.md` (own pool for synchronous work, whole-word renames, queue after Destroy), `TPcThreadPool.MaxWorkers` and gotcha 5, released as 1.1.0. **redis done 2026-10-04** (pascal-redis-faa v0.1.0, on v1.1.0; `Redis.Threading` deleted, the version check in `Redis.Types`): unit 436/436 and integration 69/69, 0 leaks, on FPC Windows/Linux and Delphi Win32/Win64. Its findings went into `migrating.md` (forms must wait in `OnCloseQuery`; heaptrc must be seen on; `packagefiles.xml`) and gotcha 6, released as 1.1.1. **F8 done: every library migrated.** |
+| F9 | delphi-api-infra-faa, then delphi-api-starter (and api-test, if still in use) | Replace `Common.Optionals`, `Common.SystemContext` and `Common.ClockCache` with pascal-common-faa's; its consumers provide pascal-common-faa | its unit and integration suites green on Delphi Win32/Win64, 0 leaks; the starter builds and runs |
+| F10 | pascal-dfe-broker | Move `vendor/pascal-amqp-faa` to amqp v0.1.0, provide pascal-common-faa itself, rename in `ConsumidorDFeVcl`, make that form wait for its pool items in `OnCloseQuery` | its FPC and Delphi suites, the AMQP integration tests and the Linux CI green, 0 leaks |
+| F11 | pascal-jsonmapper-faa | `PascalJsonMapper.TestOptionals` says "shaped like PascalDb.Optionals": now `PascalCommon.Optionals` (comment only) | — |
+
+## Beyond the first four libraries (found 2026-10-05)
+
+A survey of the sibling repositories after F8 found three more places affected:
+
+- **delphi-api-infra-faa** (Delphi only, Horse REST infrastructure; consumed as a submodule in
+  `infra/` by delphi-api-starter and api-test) still carries `Common.Optionals`,
+  `Common.SystemContext` and `Common.ClockCache`. It is the lineage pascal-db-faa's copies came from.
+  Compared declaration by declaration:
+  - `Common.Optionals` is pascal-common-faa's plus the deprecated `Safe*` removed in 0.2.0. Only
+    one test calls them, the same one that did here.
+  - `Common.SystemContext` lacks `TTicker`.
+  - `Common.ClockCache` is the same.
+
+  **Its interfaces have the same GUIDs** as pascal-common-faa's (`IOptionalBase`, `INullableBase`,
+  `IOptString`, `INullString`, `IOptNullString`, `IOptInteger`, `IClock`, `ISleep` checked). An
+  application linking both would hold two different `IOptString` types with one GUID: a
+  `Supports`/`QueryInterface` by GUID can hand back the other library's interface, which works
+  only while the two method layouts stay identical. Not measured; no project here links both
+  today, but an API built on Horse with pascal-db-faa is exactly the case this library exists
+  for. Its own JSON mapper (`Common.JsonMapper`) also handles the optionals, with rules
+  `PascalCommon.JsonMapper.Optionals` documents as different on purpose. F9 migrates it. That
+  removes both the name and the GUID clash. Its DB layer (the ancestor of pascal-db-faa) is out
+  of F9's scope.
+- **pascal-dfe-broker** pins `vendor/pascal-amqp-faa` at `615b397` (2026-09-19, before amqp's
+  migration). Nothing breaks until it moves to amqp v0.1.0; then it must provide pascal-common-faa
+  itself, and its VCL/LCL sample `ConsumidorDFeVcl` (queues work with the form as `Self` on
+  `AmqpPool`) needs the `OnCloseQuery` wait from `migrating.md`. F10.
+- **pascal-jsonmapper-faa**: one comment. F11.
+
+No action: delphi-amqp-faa (amqp's predecessor; its references are to itself), pascal-snake (a
+comment), pascal-skills-threads, pascal-api-infra-faa (an empty folder).
 
 ## Name map
 
