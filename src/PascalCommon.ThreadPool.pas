@@ -136,11 +136,18 @@ type
     /// Items waiting for a free worker (not counting the running ones). For
     /// PcPool, this counts the items of every library sharing it.
     function QueueDepth: Integer;
+    /// The most workers this pool will start: the value given to Create, or
+    /// the default it computed (max(16, 4 x cores)). Since 1.1.0.
+    property MaxWorkers: Integer read FMaxWorkers;
   end;
 
 /// The process-wide pool, shared by every library that uses it. Created in
 /// this unit's initialization and freed in its finalization (see the unit
-/// header for what that means to a consumer).
+/// header for what that means to a consumer). It is meant for work that may
+/// block, such as user callbacks. Work that another thread waits for
+/// synchronously (an actor answering requests) belongs on a TPcThreadPool of
+/// its own: with the shared ceiling, one library's slow callbacks would
+/// become another library's timeouts.
 function PcPool: TPcThreadPool;
 
 implementation

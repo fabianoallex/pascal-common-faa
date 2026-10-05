@@ -8,7 +8,7 @@
 
 { Tests for PascalCommon.ThreadPool: the monitor (timeout and PulseAll), the
   pool (runs every item, survives an exception, Destroy runs what is still
-  queued, QueueDepth) and the process-wide PcPool.
+  queued, QueueDepth, MaxWorkers) and the process-wide PcPool.
 
   Ported from the monitor/pool part of Pipes.ThreadingTests
   (pascal-named-pipes-faa), translated and rewritten in the TAssert dialect.
@@ -47,6 +47,7 @@ type
     procedure Pool_ExceptionInAnItemDoesNotKillTheWorker;
     procedure Pool_DestroyRunsTheQueuedItems;
     procedure Pool_QueueDepth_CountsOnlyWaitingItems;
+    procedure Pool_MaxWorkers_ReportsTheCeiling;
     procedure PcPool_IsCreatedAndAlwaysTheSameInstance;
     procedure PcPool_RunsWork;
   end;
@@ -299,6 +300,29 @@ begin
     LRelease.Free;
     LStarted.Free;
   end;
+end;
+
+procedure TThreadPoolTests.Pool_MaxWorkers_ReportsTheCeiling;
+var
+  LPool: TPcThreadPool;
+  LDefault: Integer;
+begin
+  LDefault := TThread.ProcessorCount * 4;
+  if LDefault < 16 then
+    LDefault := 16;
+  LPool := TPcThreadPool.Create(3);
+  try
+    TAssert.AssertEquals(3, LPool.MaxWorkers);
+  finally
+    LPool.Free;
+  end;
+  LPool := TPcThreadPool.Create;
+  try
+    TAssert.AssertEquals('default ceiling', LDefault, LPool.MaxWorkers);
+  finally
+    LPool.Free;
+  end;
+  TAssert.AssertEquals('PcPool uses the default ceiling', LDefault, PcPool.MaxWorkers);
 end;
 
 procedure TThreadPoolTests.PcPool_IsCreatedAndAlwaysTheSameInstance;

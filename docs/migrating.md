@@ -114,7 +114,9 @@ perl -pi -e 's/\bPascalDb\.(Threading|SystemContext|ClockCache|Optionals|JsonMap
              s/pascal_db_faa_jsonmapper/pascal_common_faa_jsonmapper/g' <files>
 ```
 
-Use `perl -pi`, not `sed -i`: in Git Bash on Windows, `sed -i` rewrites every file it is given
+Always match whole words (`\b`): amqp has `TAMQPMonitorThread`, a different type from
+`TAMQPMonitor`, and a pattern without `\b` would turn it into `TPcMonitorThread`. Use `perl -pi`,
+not `sed -i`: in Git Bash on Windows, `sed -i` rewrites every file it is given
 with LF line endings, even the files where nothing matched (gotcha 3). `perl -pi` keeps CRLF.
 
 ## Behavior to know about
@@ -129,6 +131,15 @@ with LF line endings, even the files where nothing matched (gotcha 3). `perl -pi
   `PascalCommon.ThreadPool`, so `PcPool` is still alive and still running your items when your
   finalization frees things. The donors didn't have this problem: each one owned its pool and
   freed it first, and that ran the whole queue. See the next point.
+- **`PcPool` is for work that may block** (user callbacks, I/O). Work that another thread waits
+  for synchronously, such as an actor answering requests or a dispatcher whose items reply to a
+  caller, belongs on a `TPcThreadPool` of its own. `PcPool` has a ceiling (`MaxWorkers`,
+  `max(16, 4 × cores)`) shared by every library in the process, so one library's slow callbacks
+  become another library's timeouts. This is a correctness issue, not only a latency one.
+  Measured in the pascal-amqp-faa migration (F8), with `PcPool` saturated by blocking items: with
+  the broker's queue actors on `PcPool`, `Queue.Declare` waited its full 15 s and the broker
+  dropped the connection; on a pool of the broker's own, it took 26 ms. amqp's broker now owns
+  its pool, and its client stays on `PcPool`.
 - **An object whose work runs on `PcPool` and that you free in your finalization must wait for
   its own items.** pascal-named-pipes-faa's `PipeGroupDispatcher` (a keyed dispatcher whose
   drain items run on the global pool) used to be freed after the pool. Freed before `PcPool`,
@@ -146,7 +157,9 @@ with LF line endings, even the files where nothing matched (gotcha 3). `perl -pi
   See `Pipes.Threading` (`TPipeMailboxDrainWork.Destroy`, `TPipeKeyedDispatcher.Destroy`) in
   pascal-named-pipes-faa.
 - **`TPcThreadPool.Destroy` runs every queued item before returning.** The donors did the same.
-  The Pipes header and test said Destroy discarded the queued items, but it never did.
+  The Pipes header and test, and amqp's `AMQP.Server.Queue` header, said Destroy discarded the
+  queued items, but it never did. Only an item queued **after** `Destroy` has started is freed
+  without running. So never rely on queuing a "stop" item to a pool that is being destroyed.
 - **64-bit atomics wrap around** instead of raising, even with overflow checks on in the
   project. pascal-db-faa's `PdbAtomicAdd64` could raise `EIntOverflow` on the returned copy,
   after the shared value had already changed.

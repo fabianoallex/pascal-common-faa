@@ -6,6 +6,22 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-04
+
+### Added
+
+- `TPcThreadPool.MaxWorkers` (read-only): the most workers the pool will start, either the value
+  given to `Create` or the default it computed.
+
+### Changed
+
+- `docs/migrating.md`, from the pascal-amqp-faa migration (F8): `PcPool` is for work that may
+  block, and work another thread waits for synchronously belongs on a pool of its own (measured
+  there: 15 s and a dropped connection against 26 ms); renames always match whole words; an item
+  queued after `Destroy` has started is freed without running. `PcPool`'s doc comment says the
+  same.
+- `docs/gotchas.md`: gotcha 5 (heaptrc prints nothing at exit on Debian's FPC without `log=`).
+
 ## [1.0.1] - 2026-10-04
 
 Documentation only: no change to the API or its behavior.
@@ -75,7 +91,8 @@ First release: the code shared by the `*-faa` libraries, moved here from their o
 - `README.md` and `docs/migrating.md` (moving a library off its own copy: units, name map,
   behavior differences).
 
-[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v0.1.0...v0.2.0
