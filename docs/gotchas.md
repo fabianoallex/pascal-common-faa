@@ -75,7 +75,8 @@ has one because it registers its fixture there.
 **Symptom.** A program built with `-gh` on Linux exits without the `N unfreed memory blocks`
 report, so "0 leaks" can't be observed, and a leak goes unnoticed. Reported by the
 pascal-amqp-faa migration (F8): its docs said the report was the runners' last line everywhere,
-and earlier Linux leak checks had never actually seen it. Reproduced here 2026-10-04 on Debian
+and earlier Linux leak checks had never actually seen it. pascal-dfe-broker (F10) found the same:
+its Linux script grepped the console and never built with `-gh`. Reproduced here 2026-10-04 on Debian
 bookworm FPC 3.2.2: a program that leaks 10 bytes prints nothing and exits with 0.
 
 **Cause.** There, heaptrc's exit report doesn't reach the console; given a log file, it is

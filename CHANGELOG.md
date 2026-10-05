@@ -6,6 +6,23 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-05
+
+Documentation only: no change to the API or its behavior.
+
+### Changed
+
+- From the delphi-api-infra-faa migration (F9): `docs/migrating.md` step 1 and the README cover a
+  library whose consumers clone it with `--recursive`, which brings its `external/` copy into the
+  application's tree (never on the search path). The notes about the name and GUID clash with
+  delphi-api-infra-faa's `Common.*` units are now historical, in `migrating.md` and in
+  `PascalCommon.SystemContext`'s header (comment only), since that library uses these units.
+- From the pascal-dfe-broker update (F10): `docs/migrating.md` says a GUI form must also count
+  the `TThread.Queue` calls its work items post, because on FPC `PcPool`'s finalization runs
+  leftover ones (`TThread.WaitFor` pumps `CheckSynchronize` on the main thread; measured there as
+  an access violation through `TPcThreadPool.Destroy`), and `Destroy`'s doc comment says so; a
+  project compiling a library from `src` needs only the `pascal_common_faa` package on lazbuild.
+
 ## [1.1.1] - 2026-10-04
 
 Documentation only: no change to the API or its behavior.
@@ -105,7 +122,8 @@ First release: the code shared by the `*-faa` libraries, moved here from their o
 - `README.md` and `docs/migrating.md` (moving a library off its own copy: units, name map,
   behavior differences).
 
-[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.0...v1.0.1

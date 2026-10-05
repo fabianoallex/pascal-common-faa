@@ -63,7 +63,9 @@ provides itself: one registered `pascal_common_faa.lpk` in Lazarus, or one searc
 Delphi. That is why:
 
 - **A library never ships pascal-common-faa inside itself.** It may keep it as a submodule in
-  `external/` for its own tests and CI, but not in what the application builds.
+  `external/` for its own tests and CI, but not in what the application builds. An application
+  that clones a library with `--recursive` gets that `external/` copy on disk too, and must never
+  put it on its search path.
 - **Versions follow strict semver.** From 1.0 on, a minor version only adds, so the newest copy
   serves every library.
 - **Each library checks the minimum version it needs**, so an application with an older copy

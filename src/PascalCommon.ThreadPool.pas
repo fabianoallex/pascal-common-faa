@@ -135,7 +135,9 @@ type
     constructor Create(AMaxWorkers: Integer = 0);
     /// Runs every item already queued (the workers drain the queue before
     /// they exit), then joins the workers. With a long queue it takes as long
-    /// as the queue does.
+    /// as the queue does. On FPC, called from the main thread (as PcPool's is,
+    /// in this unit's finalization), the join runs pending TThread.Queue calls
+    /// (TThread.WaitFor pumps CheckSynchronize there).
     destructor Destroy; override;
     /// Queues the item and makes sure a worker will take it (starts one if
     /// all are busy and the ceiling allows). Takes ownership of the item;

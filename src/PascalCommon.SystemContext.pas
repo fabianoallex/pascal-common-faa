@@ -30,9 +30,8 @@
   and are for tests: call them while no other thread reads it.
 
   The type names (TClock, IClock...) are the ones pascal-db-faa had.
-  delphi-api-infra-faa's Common.SystemContext declares the same names: in an
-  application that uses both, qualify them (PascalCommon.SystemContext.TClock)
-  or the unit listed last in "uses" wins. }
+  delphi-api-infra-faa's Common.SystemContext declared the same names and
+  GUIDs; since its v0.1.0 it uses this unit instead. }
 
 interface
 

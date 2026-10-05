@@ -10,7 +10,14 @@ go (plan decision 4).
 1. **Add the submodule** for your own tests and CI only:
    `git submodule add https://github.com/fabianoallex/pascal-common-faa.git external/pascal-common-faa`.
    Never put it in what the application builds: the application provides the single copy (see
-   the README, "For library authors").
+   the README, "For library authors"). **If your consumers clone your library with
+   `--recursive`** (because it has another submodule they need at runtime, as delphi-api-infra-faa
+   does with SwagDoc), that clone also brings `external/pascal-common-faa`, and its own
+   `external/pascal-jsonmapper-faa`, into the application's tree. Measured in F9. It does no
+   harm while the application's search path and packages point at the application's own copy,
+   but it is a second copy one `;` away. Say in your README that `external/` is never on the
+   application's search path. Not measured: marking the submodule `update = none` in your
+   `.gitmodules`, so that only your own tests and CI check it out explicitly.
 2. **Delete the moved units** (table below) and rename what remains (name map below).
 3. **Depend on the package, by name.** On Lazarus, the library's own `.lpk` requires
    `pascal_common_faa` **by name only**, with no `DefaultFilename`, and a `MinVersion`:
@@ -30,8 +37,14 @@ go (plan decision 4).
    wins over the `DefaultFilename`. Building the library's `.lpk` alone with lazbuild fails until
    `pascal_common_faa.lpk` is registered (by design), and leaves a `packagefiles.xml` in the
    current folder (gotcha 6): register it first, and ignore `/packagefiles.xml`. On Delphi, add
-   `external/pascal-common-faa/src` to the test
-   projects' search path.
+   `external/pascal-common-faa/src` to the test projects' search path.
+
+   An application, or a project that compiles a library from its `src` folder instead of its
+   `.lpk`, needs only the `pascal_common_faa` package on lazbuild (first, `DefaultFilename`,
+   `Prefer="True"`). Don't also put pascal-common-faa's `src` on its search path: that is
+   redundant and risks compiling the units twice. Measured in pascal-dfe-broker (F10): the units
+   were compiled only into the package's `lib` folder. The `src` path is needed on Delphi, and
+   where `fpc` is called directly without lazbuild (Docker scripts: `-Fu` and `-Fi` on `src`).
 4. **If the library uses the JSON bridge,** each project that uses it also requires the mapper
    itself, before the bridge:
 
@@ -178,10 +191,19 @@ with LF line endings, even the files where nothing matched (gotcha 3). `perl -pi
   - while waiting, pump `CheckSynchronize(10)` instead of `Sleep(10)`. The items post
     `TThread.Queue` calls as they finish, and nobody runs those after the message loop. On Delphi
     they also leak: `DoneThreadSynchronization` doesn't free what is left in the queue;
+  - count the `TThread.Queue` calls an item posts too, not only the item: create the marshal and
+    count it before the item uncounts itself in its destructor, so the counter never passes
+    through 0 on the way. An item that only posts a marshal and never touches the form still
+    causes a use after free. **On FPC, `PcPool`'s own finalization pumps those leftover marshals**:
+    `TPcThreadPool.Destroy` joins its workers with `TThread.WaitFor`, which, called from the main
+    thread, runs `CheckSynchronize` (read in FPC 3.2.2's `rtl/win/tthread.inc` and
+    `rtl/unix/tthread.inc`). So a marshal left behind runs there, against the freed form.
+    Measured in pascal-dfe-broker (F10): an access violation in the form's handler with a call
+    stack through `TPcThreadPool.Destroy` when the marshal ran; a heaptrc leak when it didn't;
   - a work item never reads a control. On LCL, reading `TEdit.Text` from a worker is a
     cross-thread `SendMessage` to the UI thread, and that is the thread waiting for the item.
 
-  See `docs/DECISOES.md` §50 in pascal-redis-faa.
+  See `docs/DECISOES.md` §50 in pascal-redis-faa, and `ConsumidorDFeVcl` in pascal-dfe-broker.
 - **`TPcThreadPool.Destroy` runs every queued item before returning.** The donors did the same.
   The Pipes header and test, and amqp's `AMQP.Server.Queue` header, said Destroy discarded the
   queued items, but it never did. Only an item queued **after** `Destroy` has started is freed
@@ -191,6 +213,7 @@ with LF line endings, even the files where nothing matched (gotcha 3). `perl -pi
   after the shared value had already changed.
 - **FPC on 32-bit CPUs now builds.** FPC 3.2.2 has no 64-bit `InterLocked*` there, so the
   donors' `*64` atomics didn't compile on FPC i386; here they go through a lock (gotcha 1).
-- **Name clash with delphi-api-infra-faa:** its `Common.SystemContext` and `Common.ClockCache`
-  declare `TClock`, `TSleep`, `IClock`, `TClockCache`... too. In code that uses both, qualify
-  the names (`PascalCommon.SystemContext.TClock`), or the unit listed last in `uses` wins.
+- **delphi-api-infra-faa used to clash with these names.** Its `Common.SystemContext`,
+  `Common.ClockCache` and `Common.Optionals` declared the same names and the same interface GUIDs.
+  Since its v0.1.0 (F9) it uses pascal-common-faa instead. Code still on an older infra version
+  must not be linked with pascal-common-faa.
