@@ -2,7 +2,8 @@ unit PascalCommon.ThreadPoolTests;
 
 { Tests for PascalCommon.ThreadPool: the monitor (timeout and PulseAll), the
   pool (runs every item, survives an exception, Destroy runs what is still
-  queued, QueueDepth, MaxWorkers, a burst after idle workers grows the pool) and the process-wide PcPool.
+  queued, QueueDepth, MaxWorkers, a burst after idle workers grows the pool,
+  PcProcessorCount) and the process-wide PcPool.
 
   Ported from the monitor/pool part of Pipes.ThreadingTests
   (pascal-named-pipes-faa), translated and rewritten in the TAssert dialect.
@@ -44,6 +45,7 @@ type
     [Test] procedure Pool_DestroyRunsTheQueuedItems;
     [Test] procedure Pool_QueueDepth_CountsOnlyWaitingItems;
     [Test] procedure Pool_MaxWorkers_ReportsTheCeiling;
+    [Test] procedure PcProcessorCount_IsAtLeastTheRtlCount;
     [Test] procedure Pool_BurstAfterIdleWorkers_GrowsUpToTheCeiling;
     [Test] procedure PcPool_IsCreatedAndAlwaysTheSameInstance;
     [Test] procedure PcPool_RunsWork;
@@ -328,7 +330,7 @@ var
   LPool: TPcThreadPool;
   LDefault: Integer;
 begin
-  LDefault := TThread.ProcessorCount * 4;
+  LDefault := PcProcessorCount * 4;
   if LDefault < 16 then
     LDefault := 16;
   LPool := TPcThreadPool.Create(3);
@@ -344,6 +346,19 @@ begin
     LPool.Free;
   end;
   TAssert.AssertEquals('PcPool uses the default ceiling', LDefault, PcPool.MaxWorkers);
+end;
+
+procedure TThreadPoolTests.PcProcessorCount_IsAtLeastTheRtlCount;
+begin
+  // The real count is checked by hand against nproc on Linux (see the
+  // CHANGELOG for 1.2.0); here, what holds on every platform.
+  TAssert.AssertTrue('at least 1', PcProcessorCount >= 1);
+  TAssert.AssertTrue('never below the RTL''s count',
+    PcProcessorCount >= Integer(TThread.ProcessorCount));
+  {$IF DEFINED(MSWINDOWS) or not DEFINED(FPC)}
+  TAssert.AssertEquals('the RTL''s count where it is right', Integer(TThread.ProcessorCount),
+    PcProcessorCount);
+  {$IFEND}
 end;
 
 procedure TThreadPoolTests.Pool_BurstAfterIdleWorkers_GrowsUpToTheCeiling;

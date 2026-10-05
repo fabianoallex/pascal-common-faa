@@ -131,9 +131,9 @@ type
   public
     /// AMaxWorkers = 0 uses the default: max(16, 4 x cores). Work items may
     /// block on I/O for seconds (the target use case), hence the generous
-    /// ceiling; limit the work in flight in the layer above if needed. On FPC
-    /// 3.2.2 outside Windows, TThread.ProcessorCount is always 1 (its RTL only
-    /// counts CPUs on Windows and OS/2), so the default there is 16.
+    /// ceiling; limit the work in flight in the layer above if needed. Cores
+    /// come from PcProcessorCount, not TThread.ProcessorCount (always 1 on
+    /// FPC outside Windows; gotcha 7).
     constructor Create(AMaxWorkers: Integer = 0);
     /// Runs every item already queued (the workers drain the queue before
     /// they exit), then joins the workers. With a long queue it takes as long
@@ -161,6 +161,14 @@ type
 /// its own: with the shared ceiling, one library's slow callbacks would
 /// become another library's timeouts.
 function PcPool: TPcThreadPool;
+
+/// The number of CPUs the system has online, at least 1. TThread.ProcessorCount
+/// on Delphi and on FPC for Windows. On FPC for Linux, sysconf
+/// (_SC_NPROCESSORS_ONLN), because FPC 3.2.2's TThread.ProcessorCount is
+/// always 1 there (gotcha 7). On other FPC targets, TThread.ProcessorCount
+/// (so 1). It counts CPUs, not a container's CPU quota: with Docker's --cpus=1
+/// it still reports every CPU of the host. Since 1.2.0.
+function PcProcessorCount: Integer;
 
 implementation
 
@@ -272,7 +280,7 @@ begin
   inherited Create;
   if AMaxWorkers <= 0 then
   begin
-    AMaxWorkers := TThread.ProcessorCount * 4;
+    AMaxWorkers := PcProcessorCount * 4;
     if AMaxWorkers < 16 then
       AMaxWorkers := 16;
   end;
@@ -374,6 +382,29 @@ begin
 end;
 
 { --- Process-wide pool --- }
+
+{ --- CPU count --- }
+
+{$IF DEFINED(FPC) and DEFINED(LINUX)}
+// libc's sysconf. Linking it costs nothing here: a program that uses this
+// unit on Linux runs threads, so it already has cthreads and libc. The
+// constant is the same in glibc and musl.
+function sysconf(AName: LongInt): PtrInt; cdecl; external 'c' name 'sysconf';
+
+const
+  SC_NPROCESSORS_ONLN = 84;
+{$IFEND}
+
+function PcProcessorCount: Integer;
+begin
+  {$IF DEFINED(FPC) and DEFINED(LINUX)}
+  Result := Integer(sysconf(SC_NPROCESSORS_ONLN));
+  {$ELSE}
+  Result := Integer(TThread.ProcessorCount);
+  {$IFEND}
+  if Result < 1 then
+    Result := 1;
+end;
 
 var
   GPool: TPcThreadPool;

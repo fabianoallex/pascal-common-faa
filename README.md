@@ -22,7 +22,7 @@ as ARM.
 |---|---|
 | `PascalCommon.Version` | `PASCALCOMMON_VERSION` (major × 10000 + minor × 100 + patch), for compile-time checks |
 | `PascalCommon.Threading` | Atomics (`PcAtomicInc`, `Dec`, `Get`, `Set`, `CompareExchange`; 64-bit `PcAtomicInc64`, `Add64`, `Read64`, `Write64`, `CompareExchange64` for `Int64` and `UInt64`) and monotonic time (`PcTickMs`, `PcTickUs`). `TInterlocked` and `TStopwatch` don't exist in FPC |
-| `PascalCommon.ThreadPool` | `TPcMonitor` (lock + condition variable), `TPcThreadPool` with `TPcWorkItem`, and the process-wide pool `PcPool` |
+| `PascalCommon.ThreadPool` | `TPcMonitor` (lock + condition variable), `TPcThreadPool` with `TPcWorkItem`, the process-wide pool `PcPool`, and `PcProcessorCount` (the real CPU count, also on FPC for Linux) |
 | `PascalCommon.SystemContext` | Replaceable wall clock (`TClock`), monotonic clock (`TTicker`) and wait (`TSleep`), so tests can run time-dependent code without real waits |
 | `PascalCommon.ClockCache` | `TClockCache<K, V>`: a thread-safe, fixed-size cache (G-Clock eviction) with predictable latency |
 | `PascalCommon.Optionals` | Optional and nullable types: `IOptXxx` ("was it provided?"), `INullXxx` ("is it null?") and `IOptNullXxx` (both), for String, Integer, Int64, Single, Double, Currency, TDateTime, Boolean and TGUID, with `TOptionals.Safe` |

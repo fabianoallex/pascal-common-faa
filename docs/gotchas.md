@@ -110,8 +110,11 @@ FPC 3.2.2: `nproc` 12, `ProcessorCount` 1.
 **Cause.** `TThread.FProcessorCount` comes from `GetCPUCount`. FPC 3.2.2 implements that only for
 Windows (`rtl/win/sysos.inc`) and OS/2; everywhere else the generic version returns 1.
 
-**Fix.** None in this library for now: the ceiling stays 16 on FPC outside Windows, and the
-`TPcThreadPool.Create` doc comment says so. Pass `AMaxWorkers` explicitly when a pool needs more.
-Reading the count another way (`sysconf(_SC_NPROCESSORS_ONLN)`) would change the default ceiling
-on those platforms, so it is left for a decision of its own.
+**Fix.** Use `PcProcessorCount` (`PascalCommon.ThreadPool`, since 1.2.0) instead of
+`TThread.ProcessorCount`. On FPC for Linux it reads libc's `sysconf(_SC_NPROCESSORS_ONLN)`, measured
+2026-10-05 on Debian bookworm x86_64 and i386: 12, the same as `nproc`, with or without
+`--cpus=1`. It counts CPUs, not a container's quota. `TPcThreadPool`'s default ceiling uses it,
+so `PcPool` has `max(16, 4 × cores)` on Linux too (48 on that machine, 16 before 1.2.0). Other FPC
+targets outside Windows (macOS, the BSDs) still get the RTL's 1: their `sysconf` constants
+differ and were not measured. Pass `AMaxWorkers` explicitly there when a pool needs more.
 

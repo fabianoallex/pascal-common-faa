@@ -6,6 +6,23 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-05
+
+### Added
+
+- `PcProcessorCount` (`PascalCommon.ThreadPool`): the number of CPUs online, at least 1. On FPC
+  for Linux it reads libc's `sysconf(_SC_NPROCESSORS_ONLN)`, because FPC 3.2.2's
+  `TThread.ProcessorCount` is always 1 there (gotcha 7); elsewhere it is
+  `TThread.ProcessorCount`.
+
+### Changed
+
+- `TPcThreadPool`'s default ceiling (`max(16, 4 × cores)`, including `PcPool`'s) counts cores
+  with `PcProcessorCount`. On FPC for Linux it is now what the documentation always said instead
+  of 16: 48 on a 12-CPU machine (measured on x86_64 and i386, also under `--cpus=1`, which caps
+  CPU time, not the CPU count). Nothing changes on Windows or Delphi. A pool created with an
+  explicit `AMaxWorkers` is not affected.
+
 ## [1.1.3] - 2026-10-05
 
 ### Fixed
@@ -141,7 +158,8 @@ First release: the code shared by the `*-faa` libraries, moved here from their o
 - `README.md` and `docs/migrating.md` (moving a library off its own copy: units, name map,
   behavior differences).
 
-[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.3...HEAD
+[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.0...v1.1.1
