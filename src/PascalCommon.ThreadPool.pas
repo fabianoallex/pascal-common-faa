@@ -131,7 +131,9 @@ type
   public
     /// AMaxWorkers = 0 uses the default: max(16, 4 x cores). Work items may
     /// block on I/O for seconds (the target use case), hence the generous
-    /// ceiling; limit the work in flight in the layer above if needed.
+    /// ceiling; limit the work in flight in the layer above if needed. On FPC
+    /// 3.2.2 outside Windows, TThread.ProcessorCount is always 1 (its RTL only
+    /// counts CPUs on Windows and OS/2), so the default there is 16.
     constructor Create(AMaxWorkers: Integer = 0);
     /// Runs every item already queued (the workers drain the queue before
     /// they exit), then joins the workers. With a long queue it takes as long
@@ -347,7 +349,12 @@ begin
       Exit;
     end;
     FQueue.Enqueue(AItem);
-    if (FIdle = 0) and (FWorkers.Count < FMaxWorkers) then
+    // FQueue.Count - FIdle is the number of items no idle worker will take: a
+    // signalled worker stays counted in FIdle until it dequeues, under this
+    // same lock. Testing only "FIdle = 0" ran a burst on the workers that were
+    // idle when it started, however many items it held (found by
+    // pascal-amqp-faa after its v0.1.0; fixed in 1.1.3).
+    if (FQueue.Count > FIdle) and (FWorkers.Count < FMaxWorkers) then
       FWorkers.Add(TWorker.Create(Self)) // serves it without relying on the event
     else
       FWork.SetEvent;

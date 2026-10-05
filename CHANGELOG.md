@@ -6,6 +6,25 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-05
+
+### Fixed
+
+- `TPcThreadPool.Queue` didn't grow the pool during a burst. It only started a worker when no
+  worker was idle, and a worker already signalled still counted as idle until it took its item.
+  So a burst queued while N workers were idle ran on those N, however many items it held, and
+  blocking items waited behind each other below the ceiling. With 6 idle workers, a burst of 17
+  blocking items on a pool of 16 ran 6. It now starts a worker whenever the queue holds more
+  items than there are idle workers to take them. Found by pascal-amqp-faa after its v0.1.0: it
+  explains the intermittent `ConsomeTodas_ComAck_E_Concorrencia` failure seen there since its
+  migration. New regression test `Pool_BurstAfterIdleWorkers_GrowsUpToTheCeiling`, checked to
+  fail on the old code.
+
+### Changed
+
+- `TPcThreadPool.Create`'s doc comment, `docs/migrating.md` and the new gotcha 7: on FPC outside
+  Windows, `TThread.ProcessorCount` is always 1, so the default ceiling there is 16.
+
 ## [1.1.2] - 2026-10-05
 
 Documentation only: no change to the API or its behavior.
@@ -122,7 +141,8 @@ First release: the code shared by the `*-faa` libraries, moved here from their o
 - `README.md` and `docs/migrating.md` (moving a library off its own copy: units, name map,
   behavior differences).
 
-[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.0.1...v1.1.0

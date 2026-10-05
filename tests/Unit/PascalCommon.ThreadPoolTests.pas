@@ -2,7 +2,7 @@ unit PascalCommon.ThreadPoolTests;
 
 { Tests for PascalCommon.ThreadPool: the monitor (timeout and PulseAll), the
   pool (runs every item, survives an exception, Destroy runs what is still
-  queued, QueueDepth, MaxWorkers) and the process-wide PcPool.
+  queued, QueueDepth, MaxWorkers, a burst after idle workers grows the pool) and the process-wide PcPool.
 
   Ported from the monitor/pool part of Pipes.ThreadingTests
   (pascal-named-pipes-faa), translated and rewritten in the TAssert dialect.
@@ -44,6 +44,7 @@ type
     [Test] procedure Pool_DestroyRunsTheQueuedItems;
     [Test] procedure Pool_QueueDepth_CountsOnlyWaitingItems;
     [Test] procedure Pool_MaxWorkers_ReportsTheCeiling;
+    [Test] procedure Pool_BurstAfterIdleWorkers_GrowsUpToTheCeiling;
     [Test] procedure PcPool_IsCreatedAndAlwaysTheSameInstance;
     [Test] procedure PcPool_RunsWork;
   end;
@@ -74,6 +75,17 @@ type
     FRelease: TEvent;
   public
     constructor Create(AStarted, ARelease: TEvent);
+    procedure Execute; override;
+  end;
+
+  { Counts itself as started, then blocks until ARelease is set (deadline
+    10 s). }
+  TCountingBlockingWork = class(TPcWorkItem)
+  private
+    FStarted: PInteger;
+    FRelease: TEvent;
+  public
+    constructor Create(AStarted: PInteger; ARelease: TEvent);
     procedure Execute; override;
   end;
 
@@ -126,6 +138,19 @@ end;
 procedure TBlockingWork.Execute;
 begin
   FStarted.SetEvent;
+  FRelease.WaitFor(10000);
+end;
+
+constructor TCountingBlockingWork.Create(AStarted: PInteger; ARelease: TEvent);
+begin
+  inherited Create;
+  FStarted := AStarted;
+  FRelease := ARelease;
+end;
+
+procedure TCountingBlockingWork.Execute;
+begin
+  PcAtomicInc(FStarted^);
   FRelease.WaitFor(10000);
 end;
 
@@ -319,6 +344,57 @@ begin
     LPool.Free;
   end;
   TAssert.AssertEquals('PcPool uses the default ceiling', LDefault, PcPool.MaxWorkers);
+end;
+
+procedure TThreadPoolTests.Pool_BurstAfterIdleWorkers_GrowsUpToTheCeiling;
+const
+  CEILING = 8;
+  WARMUP = 4;
+var
+  LPool: TPcThreadPool;
+  LStarted, LRelease: TEvent;
+  LCounter, LBlocked, I: Integer;
+  LDeadline: UInt64;
+begin
+  // Regression test for 1.1.3: a burst queued while some workers were idle
+  // only ran on those, however many blocking items it held. WARMUP workers
+  // are started one at a time and left idle; then CEILING + 1 blocking items
+  // are queued in a row. All CEILING workers must end up running one each,
+  // with one item left in the queue.
+  LCounter := 0;
+  LBlocked := 0;
+  LStarted := TEvent.Create(nil, False, False, '');
+  LRelease := TEvent.Create(nil, True, False, '');
+  LPool := TPcThreadPool.Create(CEILING);
+  try
+    // WARMUP workers, each started by its own blocking item, then all released.
+    for I := 1 to WARMUP do
+    begin
+      LPool.Queue(TBlockingWork.Create(LStarted, LRelease));
+      TAssert.AssertTrue('warm-up item did not start', LStarted.WaitFor(5000) = wrSignaled);
+    end;
+    LRelease.SetEvent;
+    LPool.Queue(TCounterWork.Create(@LCounter));
+    TAssert.AssertTrue('warm-up did not finish', WaitCounter(LCounter, 1, 5000));
+    // Gives the warm-up workers time to go back to sleep. Correct code passes
+    // either way; this only makes the test sensitive to the old bug, which
+    // needed idle workers to show.
+    Sleep(200);
+    LRelease.ResetEvent;
+    for I := 1 to CEILING + 1 do
+      LPool.Queue(TCountingBlockingWork.Create(@LBlocked, LRelease));
+    LDeadline := PcTickMs + 5000;
+    while ((PcAtomicGet(LBlocked) < CEILING) or (LPool.QueueDepth <> 1)) and
+      (PcTickMs < LDeadline) do
+      Sleep(5);
+    TAssert.AssertEquals('items running after the burst', CEILING, PcAtomicGet(LBlocked));
+    TAssert.AssertEquals('items left in the queue', 1, LPool.QueueDepth);
+  finally
+    LRelease.SetEvent;
+    LPool.Free;
+    LRelease.Free;
+    LStarted.Free;
+  end;
 end;
 
 procedure TThreadPoolTests.PcPool_IsCreatedAndAlwaysTheSameInstance;

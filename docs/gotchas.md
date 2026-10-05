@@ -100,3 +100,18 @@ dependency, lazbuild writes a copy of the user's package links to the current fo
 with `Prefer="True"`), and add `/packagefiles.xml` to `.gitignore`. This repository's
 `.gitignore` has it, and pipes, amqp and redis do too.
 
+## 7. FPC outside Windows: `TThread.ProcessorCount` is always 1
+
+**Symptom.** On Linux, `TThread.ProcessorCount` returns 1 whatever the machine has, so a default
+derived from it is wrong: `PcPool`'s ceiling, documented as `max(16, 4 × cores)`, is 16 there.
+Reported by pascal-amqp-faa after its v0.1.0, and measured here 2026-10-05 on Debian bookworm
+FPC 3.2.2: `nproc` 12, `ProcessorCount` 1.
+
+**Cause.** `TThread.FProcessorCount` comes from `GetCPUCount`. FPC 3.2.2 implements that only for
+Windows (`rtl/win/sysos.inc`) and OS/2; everywhere else the generic version returns 1.
+
+**Fix.** None in this library for now: the ceiling stays 16 on FPC outside Windows, and the
+`TPcThreadPool.Create` doc comment says so. Pass `AMaxWorkers` explicitly when a pool needs more.
+Reading the count another way (`sysconf(_SC_NPROCESSORS_ONLN)`) would change the default ceiling
+on those platforms, so it is left for a decision of its own.
+

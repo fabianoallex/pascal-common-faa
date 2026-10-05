@@ -154,7 +154,7 @@ with LF line endings, even the files where nothing matched (gotcha 3). `perl -pi
 - **`PcPool` is for work that may block** (user callbacks, I/O). Work that another thread waits
   for synchronously, such as an actor answering requests or a dispatcher whose items reply to a
   caller, belongs on a `TPcThreadPool` of its own. `PcPool` has a ceiling (`MaxWorkers`,
-  `max(16, 4 × cores)`) shared by every library in the process, so one library's slow callbacks
+  `max(16, 4 × cores)`, which is 16 on FPC outside Windows: gotcha 7) shared by every library in the process, so one library's slow callbacks
   become another library's timeouts. This is a correctness issue, not only a latency one.
   Measured in the pascal-amqp-faa migration (F8), with `PcPool` saturated by blocking items: with
   the broker's queue actors on `PcPool`, `Queue.Declare` waited its full 15 s and the broker
