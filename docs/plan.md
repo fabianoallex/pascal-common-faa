@@ -176,6 +176,24 @@ the APIs' contract, not only an internal one.
 No action: delphi-amqp-faa (amqp's predecessor; its references are to itself), pascal-snake (a
 comment), pascal-skills-threads, pascal-api-infra-faa (an empty folder).
 
+## Consumers (2026-10-06)
+
+Which pascal-common-faa each project pins, all committed and pushed:
+
+| Project | Its release | pascal-common-faa |
+|---|---|---|
+| pascal-db-faa | 0.10.1 | v1.2.0 |
+| pascal-named-pipes-faa | 0.1.1 | v1.2.0 |
+| pascal-amqp-faa | 0.1.2 | v1.2.0 (requires 1.1.3); its intermittent `ConsomeTodas_ComAck_E_Concorrencia` is gone: 40/40 at `--cpus=1` |
+| pascal-redis-faa | 0.1.2 | v1.2.0 (requires 1.2.0) |
+| pascal-dfe-broker | 0.2.1 | v1.2.0 |
+| delphi-api-infra-faa | 0.1.1 | v1.1.1 |
+| delphi-api-starter, api-test | — | v1.1.1 |
+
+delphi-api-infra-faa and its consumers staying on v1.1.1 costs nothing: they use `Optionals`,
+`SystemContext` and `ClockCache`, which haven't changed since, and not the pool that 1.1.3 and
+1.2.0 fixed.
+
 ## Name map
 
 Moved to [`migrating.md`](migrating.md) in F5, together with the steps for a library and the
