@@ -12,8 +12,11 @@
 
   The output is captured with a text-file driver of the test's own: Output is
   reassigned to a device whose InOutFunc appends the buffer to a memory stream.
-  Its FlushFunc is nil, which is how the RTL treats a file or a pipe: Writeln
-  doesn't flush, the buffer goes out when it fills. That is the case where FPC
+  Its FlushFunc does nothing, which is how the RTL treats a file or a pipe:
+  Writeln doesn't flush, the buffer goes out when it fills. It can't be nil:
+  FPC skips a nil FlushFunc (its own stdout has one when redirected), but
+  Delphi calls it unchecked, an access violation at address 0 (measured on
+  Delphi 12, Win32 and Win64). That is the case where FPC
   needs SafeWriteln's Flush (unit header of PascalCommon.SafeLog, gotcha 8), so
   the concurrent test fails on FPC without it, on Windows as well as Linux.
   Output is a threadvar on FPC: there each writer thread redirects its own
@@ -103,13 +106,24 @@ end;
 {$ENDIF}
 
 {$IFDEF FPC}
+procedure CaptureNoFlush(var F: TTextRec);
+begin
+end;
+{$ELSE}
+function CaptureNoFlush(var F: TTextRec): Integer;
+begin
+  Result := 0;
+end;
+{$ENDIF}
+
+{$IFDEF FPC}
 procedure CaptureOpen(var F: TTextRec);
 {$ELSE}
 function CaptureOpen(var F: TTextRec): Integer;
 {$ENDIF}
 begin
   F.InOutFunc := @CaptureWrite;
-  F.FlushFunc := nil; // like a file or a pipe: Writeln doesn't flush
+  F.FlushFunc := @CaptureNoFlush; // like a file or a pipe: Writeln doesn't flush
   F.CloseFunc := @CaptureClose;
   F.BufPos := 0;
   F.BufEnd := 0;

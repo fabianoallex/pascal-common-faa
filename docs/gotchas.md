@@ -139,5 +139,6 @@ guards nothing. On Delphi, `Output` is one global with one buffer, so a lock is 
 **Fix.** `Flush(Output)` inside the lock, after the `Writeln`. `Flush` always calls the
 record's `InOutFunc`, whatever `FlushFunc` is. `PascalCommon.SafeLog` does this on FPC since
 1.3.0 (0 corrupted lines in the same measurement), and its test captures `Output` with a
-device that, like a pipe, has no `FlushFunc`, so it fails on FPC without the `Flush`, on Windows
-too. Code that redirects `Output` with `AssignFile` on FPC changes only the calling thread's.
+device whose `FlushFunc` does nothing, like a pipe's, so it fails on FPC without the `Flush`, on
+Windows too. (A custom text device for Delphi can't leave `FlushFunc` nil, as FPC's RTL does:
+Delphi calls it without checking, an access violation at address 0.) Code that redirects `Output` with `AssignFile` on FPC changes only the calling thread's.
