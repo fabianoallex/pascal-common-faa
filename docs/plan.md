@@ -90,6 +90,9 @@ without converting every field.
 
 Stays where it is: `TPipeKeyedDispatcher` and `TPipeHeartbeatThread` (pipes), `AmqpWallMs`
 (amqp), `PascalDb.SafeLog` (only pascal-db-faa uses it; candidate if a second user appears).
+The second user appeared: delphi-api-infra-faa's `Common.SafeLog`, the same code with its own
+lock. Both moved here as `PascalCommon.SafeLog` in 1.3.0 (2026-10-06); see `migrating.md`,
+"SafeLog". Each library switches in its own session.
 
 Tests come with the code: `PascalDb.OptionalsTests`, `PascalDb.ClockCacheTests`,
 `PascalDb.JsonMapperOptionalsTests` (already in English and in the FPCUnit dialect), and the

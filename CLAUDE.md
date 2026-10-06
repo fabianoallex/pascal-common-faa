@@ -28,8 +28,10 @@ non-ASCII values on purpose (e.g. `'São Paulo'`). Code ported from the Portugue
 Only what at least two libraries use, or what a type shared between libraries needs (the
 optionals). Everything here is a dependency of every consumer, so the library stays small and
 changes slowly. Feature code stays in its library: the keyed dispatcher and heartbeat thread in
-pipes, `AmqpWallMs` in amqp, `SafeLog` in pascal-db-faa. pascal-jsonmapper-faa is a separate
-library on purpose; this repository only has the optionals bridge to it.
+pipes, `AmqpWallMs` in amqp. `SafeLog` came here in 1.3.0, once a second library had a copy:
+code that must share one lock across the process (a console lock) belongs here as soon as two
+libraries need it. pascal-jsonmapper-faa is a separate library on purpose; this repository only
+has the optionals bridge to it.
 
 ---
 

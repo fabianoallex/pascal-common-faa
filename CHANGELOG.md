@@ -6,6 +6,22 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-06
+
+### Added
+
+- `PascalCommon.SafeLog`: `SafeWriteln(AText)` and `SafeWriteln(AFormatStr, AArgs)`, a `Writeln`
+  to the console guarded by one critical section for the whole process, and a no-op when not
+  `IsConsole` (Windows service, VCL/LCL/FMX application), where `Writeln` would raise
+  `EInOutError` 105; the `Format` overload returns before formatting. It replaces
+  `PascalDb.SafeLog` (pascal-db-faa) and `Common.SafeLog` (delphi-api-infra-faa), which had the
+  same two overloads and bodies but a lock each, so an application using both libraries had two
+  locks over one console and their lines could still mix. Those libraries switch in their own
+  releases (`docs/migrating.md`). One difference from both copies: on FPC it calls
+  `Flush(Output)` before releasing the lock. FPC's `Output` is per thread, and when stdout is a
+  file or a pipe (Docker, systemd) the lock alone didn't keep lines whole: 2,165 of 16,000 lines
+  corrupted in the measurement, none with the flush (gotcha 8). Nothing changes on Delphi.
+
 ## [1.2.0] - 2026-10-05
 
 ### Added
@@ -158,7 +174,8 @@ First release: the code shared by the `*-faa` libraries, moved here from their o
 - `README.md` and `docs/migrating.md` (moving a library off its own copy: units, name map,
   behavior differences).
 
-[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/fabianoallex/pascal-common-faa/compare/v1.1.1...v1.1.2

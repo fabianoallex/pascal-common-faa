@@ -99,6 +99,27 @@ go (plan decision 4).
 | `PascalDb.Optionals` | `PascalCommon.Optionals` |
 | `PascalDb.JsonMapper.Optionals` | `PascalCommon.JsonMapper.Optionals` |
 | package `pascal_db_faa_jsonmapper.lpk` | `pascal_common_faa_jsonmapper.lpk` |
+| `PascalDb.SafeLog` (pascal-db-faa), `Common.SafeLog` (delphi-api-infra-faa) | `PascalCommon.SafeLog` (since 1.3.0; see "SafeLog" below) |
+
+## SafeLog (1.3.0)
+
+`PascalCommon.SafeLog` replaces `PascalDb.SafeLog` (pascal-db-faa) and `Common.SafeLog`
+(delphi-api-infra-faa). The point of moving it is the lock: each copy had its own, so an
+application using both libraries had two locks over one console, and a line from one could land
+in the middle of a line from the other. Every library must use this unit, and keep no copy.
+
+- **Same API:** `SafeWriteln(const AText: string)` and
+  `SafeWriteln(const AFormatStr: string; const AArgs: array of const)`. Only the unit name
+  changes: `PascalDb.SafeLog` or `Common.SafeLog` → `PascalCommon.SafeLog` in each `uses`, then
+  delete the old unit (and its line in the `.lpk`, `.dproj` and `.dpr`).
+- **Same behavior:** one critical section created in `initialization`, a no-op when not
+  `IsConsole`, and the `Format` overload checks `IsConsole` before formatting. The only
+  difference: on FPC, `SafeWriteln` flushes `Output` inside the lock (gotcha 8). Without that,
+  lines from different threads came out mixed on FPC whenever stdout was a file or a pipe.
+- **Minimum version:** raise the library's check to `PASCALCOMMON_VERSION < 10300`, and the
+  `MinVersion` of `pascal_common_faa` in its `.lpk` to 1.3.
+- **The library's own tests of its copy** (if any) go away: this repository's
+  `PascalCommon.SafeLogTests` covers the unit.
 
 ## Names
 
@@ -142,7 +163,8 @@ with LF line endings, even the files where nothing matched (gotcha 3). `perl -pi
 ## Behavior to know about
 
 - **Stays in its library:** `TPipeKeyedDispatcher`, `PipeGroupDispatcher` and
-  `TPipeHeartbeatThread` (pipes), `AmqpWallMs` (amqp), `PascalDb.SafeLog` (pascal-db-faa).
+  `TPipeHeartbeatThread` (pipes), `AmqpWallMs` (amqp). `PascalDb.SafeLog` stayed in
+  pascal-db-faa until 1.3.0, when a second user appeared (see "SafeLog" above).
   `TPipeKeyedDispatcher` runs on any `TPcThreadPool`; `PipeGroupDispatcher` can be built on
   `PcPool`.
 - **`PcPool` is shared by every library in the process**, and created in

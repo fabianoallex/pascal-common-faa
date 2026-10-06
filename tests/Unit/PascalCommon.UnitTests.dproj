@@ -120,6 +120,7 @@
         <DCCReference Include="..\..\src\PascalCommon.ClockCache.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Optionals.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.ThreadPool.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.SafeLog.pas"/>
         <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas"/>
         <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas"/>
         <DCCReference Include="..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas"/>
@@ -129,6 +130,7 @@
         <DCCReference Include="PascalCommon.ClockCacheTests.pas"/>
         <DCCReference Include="PascalCommon.OptionalsTests.pas"/>
         <DCCReference Include="PascalCommon.ThreadPoolTests.pas"/>
+        <DCCReference Include="PascalCommon.SafeLogTests.pas"/>
         <DCCReference Include="PascalCommon.JsonMapperOptionalsTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

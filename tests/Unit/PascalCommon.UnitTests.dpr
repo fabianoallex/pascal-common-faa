@@ -22,6 +22,7 @@ uses
   PascalCommon.ClockCache in '..\..\src\PascalCommon.ClockCache.pas',
   PascalCommon.Optionals in '..\..\src\PascalCommon.Optionals.pas',
   PascalCommon.ThreadPool in '..\..\src\PascalCommon.ThreadPool.pas',
+  PascalCommon.SafeLog in '..\..\src\PascalCommon.SafeLog.pas',
   PascalJsonMapper.Json in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas',
   PascalJsonMapper.Mapper in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas',
   PascalCommon.JsonMapper.Optionals in '..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas',
@@ -31,6 +32,7 @@ uses
   PascalCommon.ClockCacheTests in 'PascalCommon.ClockCacheTests.pas',
   PascalCommon.OptionalsTests in 'PascalCommon.OptionalsTests.pas',
   PascalCommon.ThreadPoolTests in 'PascalCommon.ThreadPoolTests.pas',
+  PascalCommon.SafeLogTests in 'PascalCommon.SafeLogTests.pas',
   PascalCommon.JsonMapperOptionalsTests in 'PascalCommon.JsonMapperOptionalsTests.pas';
 
 var

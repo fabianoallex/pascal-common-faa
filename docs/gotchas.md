@@ -118,3 +118,26 @@ so `PcPool` has `max(16, 4 × cores)` on Linux too (48 on that machine, 16 befor
 targets outside Windows (macOS, the BSDs) still get the RTL's 1: their `sysconf` constants
 differ and were not measured. Pass `AMaxWorkers` explicitly there when a pool needs more.
 
+
+## 8. FPC: lines written under a lock still come out mixed when stdout is a file or a pipe
+
+**Symptom.** Several threads write to the console with `Writeln`, each call inside the same
+critical section, and the lines still come out cut and mixed with each other, but only when
+standard output is redirected to a file or a pipe (Docker, systemd, `> log`). Measured
+2026-10-06 on Debian bookworm FPC 3.2.2: 8 threads writing 2,000 lines each under one lock,
+stdout to a file, 2,165 of 16,000 lines corrupted. On a terminal it doesn't show. It affected the
+`SafeWriteln` of pascal-db-faa (`PascalDb.SafeLog`) and of delphi-api-infra-faa
+(`Common.SafeLog`), had either been used that way on FPC.
+
+**Cause.** On FPC, `Output` (like `Input` and `ErrOutput`) is a **threadvar** (`rtl/inc/systemh.inc`):
+each thread has its own text record, with its own buffer, over the same handle. And `OpenStdIO`
+(`rtl/inc/text.inc`) sets a `FlushFunc` only when the handle is a device, so for a file or a pipe
+`Writeln` leaves the line in the thread's buffer. The buffer goes out when it fills (256 bytes),
+in the middle of a line, whenever that thread next writes or ends: the lock around the `Writeln`
+guards nothing. On Delphi, `Output` is one global with one buffer, so a lock is enough there.
+
+**Fix.** `Flush(Output)` inside the lock, after the `Writeln`. `Flush` always calls the
+record's `InOutFunc`, whatever `FlushFunc` is. `PascalCommon.SafeLog` does this on FPC since
+1.3.0 (0 corrupted lines in the same measurement), and its test captures `Output` with a
+device that, like a pipe, has no `FlushFunc`, so it fails on FPC without the `Flush`, on Windows
+too. Code that redirects `Output` with `AssignFile` on FPC changes only the calling thread's.

@@ -15,7 +15,7 @@
     </CompilerOptions>
     <Description Value="Bridge between pascal-common-faa and pascal-jsonmapper-faa (Delphi and Free Pascal/Lazarus): a JSON converter for the optional types (IOptXxx/INullXxx/IOptNullXxx), registered on TJsonMapper.Shared. Requires the pascaljsonmapper_pkg package by name only: the project that uses the bridge requires the copy of the mapper it wants (DefaultFilename with Prefer), listed before this package. See docs/migrating.md."/>
     <License Value="MIT"/>
-    <Version Major="1" Minor="2"/>
+    <Version Major="1" Minor="3"/>
     <Files>
       <Item>
         <Filename Value="..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas"/>

@@ -30,6 +30,7 @@ uses
   PascalCommon.ClockCacheTests,
   PascalCommon.OptionalsTests,
   PascalCommon.ThreadPoolTests,
+  PascalCommon.SafeLogTests,
   PascalCommon.JsonMapperOptionalsTests;
 
 var

@@ -13,9 +13,9 @@
         <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
       </SearchPaths>
     </CompilerOptions>
-    <Description Value="Base library shared by the *-faa libraries (Delphi and Free Pascal/Lazarus, dual-compiler): optional/nullable types, portable atomics and monotonic time, a monitor and a thread pool, a clock/sleep context and a bounded cache."/>
+    <Description Value="Base library shared by the *-faa libraries (Delphi and Free Pascal/Lazarus, dual-compiler): optional/nullable types, portable atomics and monotonic time, a monitor and a thread pool, a clock/sleep context, a bounded cache and a thread-safe console Writeln."/>
     <License Value="MIT"/>
-    <Version Major="1" Minor="2"/>
+    <Version Major="1" Minor="3"/>
     <Files>
       <Item>
         <Filename Value="..\src\pascalcommon.inc"/>
@@ -44,6 +44,10 @@
       <Item>
         <Filename Value="..\src\PascalCommon.ThreadPool.pas"/>
         <UnitName Value="PascalCommon.ThreadPool"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.SafeLog.pas"/>
+        <UnitName Value="PascalCommon.SafeLog"/>
       </Item>
     </Files>
     <RequiredPkgs>
