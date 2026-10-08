@@ -6,6 +6,19 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-08
+
+### Added
+
+- `PascalCommon.Utf8`: `PcTryUtf8BytesToString(ABytes, out AText): Boolean`, UTF-8 bytes (BOM
+  optional) to a string, returning False instead of silently turning characters into `?` when,
+  on FPC, the bytes have non-ASCII characters and the process default code page isn't UTF-8.
+  pascal-db-faa (`PdbUtf8BytesToString`) and pascal-api-infra-faa (`PaUtf8BytesToString`) had
+  the same code, differing only in the exception they raise; they keep those functions as thin
+  wrappers in their own releases. Raises nothing itself, so each caller reports with its own
+  exception and context. On Delphi, invalid UTF-8 still makes `TEncoding.UTF8` raise
+  `EEncodingError`, as in both copies.
+
 ## [1.3.0] - 2026-10-06
 
 ### Added

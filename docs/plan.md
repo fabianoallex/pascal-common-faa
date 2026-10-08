@@ -187,7 +187,7 @@ code instead of writing a third copy; the skill's `references/faa-libraries.md` 
 
 | Code | Lives in | Status |
 |---|---|---|
-| UTF-8 bytes to string, refusing to corrupt non-ASCII text when the FPC code page isn't UTF-8 | pascal-db-faa `PdbUtf8BytesToString` (`PascalDb.SqlSources`); pascal-api-infra-faa `PaUtf8BytesToString` (`PascalApi.Text`) | **already in two libraries** (same logic, two copies): meets the rule now |
+| UTF-8 bytes to string, refusing to corrupt non-ASCII text when the FPC code page isn't UTF-8 | was in pascal-db-faa `PdbUtf8BytesToString` and pascal-api-infra-faa `PaUtf8BytesToString` | **moved in 1.4.0** (`PascalCommon.Utf8`); both keep their function as a wrapper |
 | String to UTF-8 bytes; MD5 as hex (System.Hash on Delphi, `md5` on FPC); UTF-8-safe prefix | pascal-api-infra-faa `PascalApi.Text` | one library |
 | SHA-256, HMAC-SHA256, Base64url, constant-time comparison (FPC 3.2.2 has no SHA-256) | pascal-api-infra-faa `PascalApi.Crypto` (only `SysUtils`; NIST/RFC 4231/RFC 4648 vectors in `PascalApi.CryptoTests`) | one library |
 

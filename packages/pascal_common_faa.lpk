@@ -15,7 +15,7 @@
     </CompilerOptions>
     <Description Value="Base library shared by the *-faa libraries (Delphi and Free Pascal/Lazarus, dual-compiler): optional/nullable types, portable atomics and monotonic time, a monitor and a thread pool, a clock/sleep context, a bounded cache and a thread-safe console Writeln."/>
     <License Value="MIT"/>
-    <Version Major="1" Minor="3"/>
+    <Version Major="1" Minor="4"/>
     <Files>
       <Item>
         <Filename Value="..\src\pascalcommon.inc"/>
@@ -48,6 +48,10 @@
       <Item>
         <Filename Value="..\src\PascalCommon.SafeLog.pas"/>
         <UnitName Value="PascalCommon.SafeLog"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Utf8.pas"/>
+        <UnitName Value="PascalCommon.Utf8"/>
       </Item>
     </Files>
     <RequiredPkgs>

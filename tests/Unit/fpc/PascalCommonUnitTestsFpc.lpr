@@ -31,6 +31,7 @@ uses
   PascalCommon.OptionalsTests,
   PascalCommon.ThreadPoolTests,
   PascalCommon.SafeLogTests,
+  PascalCommon.Utf8Tests,
   PascalCommon.JsonMapperOptionalsTests;
 
 var
