@@ -177,7 +177,22 @@ bridge, those rules change for the HTTP clients of every API built on it: that i
 the APIs' contract, not only an internal one.
 
 No action: delphi-amqp-faa (amqp's predecessor; its references are to itself), pascal-snake (a
-comment), pascal-skills-threads, pascal-api-infra-faa (an empty folder).
+comment), pascal-skills-threads, pascal-api-infra-faa (an empty folder then; see "Candidates to move here").
+
+## Candidates to move here (2026-10-08)
+
+Code that lives in one library today and would come here, under this library's rule ("what at
+least two libraries need"), when a second one needs it. Listed so a new need finds the existing
+code instead of writing a third copy; the skill's `references/faa-libraries.md` points here.
+
+| Code | Lives in | Status |
+|---|---|---|
+| UTF-8 bytes to string, refusing to corrupt non-ASCII text when the FPC code page isn't UTF-8 | pascal-db-faa `PdbUtf8BytesToString` (`PascalDb.SqlSources`); pascal-api-infra-faa `PaUtf8BytesToString` (`PascalApi.Text`) | **already in two libraries** (same logic, two copies): meets the rule now |
+| String to UTF-8 bytes; MD5 as hex (System.Hash on Delphi, `md5` on FPC); UTF-8-safe prefix | pascal-api-infra-faa `PascalApi.Text` | one library |
+| SHA-256, HMAC-SHA256, Base64url, constant-time comparison (FPC 3.2.2 has no SHA-256) | pascal-api-infra-faa `PascalApi.Crypto` (only `SysUtils`; NIST/RFC 4231/RFC 4648 vectors in `PascalApi.CryptoTests`) | one library |
+
+Moving one is additive here (a new unit, a minor release) and then a deprecation in the
+library it came from.
 
 ## Consumers (2026-10-06)
 
