@@ -6,6 +6,23 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-09
+
+### Added
+
+- `PascalCommon.TraceContext`: W3C Trace Context (Level 1) ids and headers, phase A of
+  pascal-api-infra-faa's observability design, here so that pascal-db-faa, pascal-redis-faa and
+  pascal-amqp-faa can carry the same context later. `PcNewTraceId` (32 lowercase hex digits)
+  and `PcNewSpanId` (16), never all zeros; `PcIsValidTraceId`/`PcIsValidSpanId`;
+  `PcTryParseTraceParent` into a `TPcTraceParent` (version, trace id, parent id, flags,
+  `Sampled`); `PcFormatTraceParent` (always version 00); `PcResolveTraceState` (forwarded
+  unchanged only with a valid `traceparent`, dropped beyond 512 characters). Parsing follows the
+  specification: lowercase hex only, version `ff` and all-zero ids invalid, version 00 exactly
+  55 characters, a higher version accepted when its first 55 characters parse and the 56th is
+  `-`, surrounding spaces and tabs ignored. The random bytes come from the OS (`BCryptGenRandom`
+  on Windows, `/dev/urandom` elsewhere, opened in `initialization`), not from `CreateGUID`,
+  whose last resort on FPC/Unix is `Random`; if the source fails, `EPcTraceContext` is raised.
+
 ## [1.4.0] - 2026-10-08
 
 ### Added

@@ -188,6 +188,7 @@ code instead of writing a third copy; the skill's `references/faa-libraries.md` 
 | Code | Lives in | Status |
 |---|---|---|
 | UTF-8 bytes to string, refusing to corrupt non-ASCII text when the FPC code page isn't UTF-8 | was in pascal-db-faa `PdbUtf8BytesToString` and pascal-api-infra-faa `PaUtf8BytesToString` | **moved in 1.4.0** (`PascalCommon.Utf8`); both keep their function as a wrapper |
+| W3C Trace Context: trace/span ids, `traceparent`/`tracestate` | designed in pascal-api-infra-faa's `docs/observability-design.md` (phase A), for that library and, in phase D, pascal-db-faa, pascal-redis-faa and pascal-amqp-faa | **moved in 1.5.0** (`PascalCommon.TraceContext`), written here directly: the contract is fixed by the W3C specification |
 | String to UTF-8 bytes; MD5 as hex (System.Hash on Delphi, `md5` on FPC); UTF-8-safe prefix | pascal-api-infra-faa `PascalApi.Text` | one library |
 | SHA-256, HMAC-SHA256, Base64url, constant-time comparison (FPC 3.2.2 has no SHA-256) | pascal-api-infra-faa `PascalApi.Crypto` (only `SysUtils`; NIST/RFC 4231/RFC 4648 vectors in `PascalApi.CryptoTests`) | one library |
 
