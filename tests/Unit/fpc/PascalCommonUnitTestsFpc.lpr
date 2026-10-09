@@ -33,6 +33,7 @@ uses
   PascalCommon.SafeLogTests,
   PascalCommon.Utf8Tests,
   PascalCommon.TraceContextTests,
+  PascalCommon.MetricsTests,
   PascalCommon.JsonMapperOptionalsTests;
 
 var

@@ -10,7 +10,8 @@ interface
 uses
   PascalCommon.Version, PascalCommon.Threading, PascalCommon.SystemContext,
   PascalCommon.ClockCache, PascalCommon.Optionals, PascalCommon.ThreadPool,
-  PascalCommon.SafeLog, PascalCommon.Utf8, PascalCommon.TraceContext;
+  PascalCommon.SafeLog, PascalCommon.Utf8, PascalCommon.TraceContext,
+  PascalCommon.Metrics;
 
 implementation
 

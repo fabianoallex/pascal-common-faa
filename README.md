@@ -28,6 +28,7 @@ as ARM.
 | `PascalCommon.SafeLog` | `SafeWriteln`: a console `Writeln` safe to call from any thread, with one lock for the whole process, and a no-op in a binary without a console (service, GUI) |
 | `PascalCommon.Utf8` | `PcTryUtf8BytesToString`: UTF-8 bytes to a string that refuses, on FPC, to corrupt non-ASCII text when the process code page isn't UTF-8 |
 | `PascalCommon.TraceContext` | W3C Trace Context: new trace and span ids (`PcNewTraceId`, `PcNewSpanId`, from the OS random source), validation, and `traceparent`/`tracestate` parse and format (`PcTryParseTraceParent`, `PcFormatTraceParent`, `PcResolveTraceState`) |
+| `PascalCommon.Metrics` | Counter, up-down counter, gauge and histogram with labels, a registry (`PcMetrics` is the process-wide one), and the Prometheus text exposition (`PcPrometheusText`). OpenTelemetry names and units (`http.server.request.duration`, `s`) become Prometheus names (`http_server_request_duration_seconds`); recording is lock-free on a series |
 | `PascalCommon.Optionals` | Optional and nullable types: `IOptXxx` ("was it provided?"), `INullXxx` ("is it null?") and `IOptNullXxx` (both), for String, Integer, Int64, Single, Double, Currency, TDateTime, Boolean and TGUID, with `TOptionals.Safe` |
 | `PascalCommon.JsonMapper.Optionals` | Optional bridge: a [pascal-jsonmapper-faa](https://github.com/fabianoallex/pascal-jsonmapper-faa) converter for the optional types. Separate package |
 

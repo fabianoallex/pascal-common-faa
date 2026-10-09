@@ -6,6 +6,27 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-09
+
+### Added
+
+- `PascalCommon.Metrics`: metrics primitives and the Prometheus text exposition, phase B of
+  pascal-api-infra-faa's observability design, here so the sibling libraries can record into
+  the same registry later. `TPcMetricRegistry` with `Counter`, `UpDownCounter`, `Gauge` and
+  `Histogram` (get-or-create by name; another definition under the same name raises
+  `EPcMetrics`); a family's `Labels([...])` gives the series for those label values, updated
+  with atomics only (a Double kept as its Int64 bits, compare-and-swap); `Snapshot` reads the
+  series (for the Prometheus writer here and an OTLP exporter later); `PcMetrics`, the
+  process-wide registry, created in `initialization`. `PcPrometheusText` writes the text format
+  0.0.4 (`PC_PROMETHEUS_CONTENT_TYPE`), converting OpenTelemetry names and units the way
+  OpenTelemetry's Prometheus compatibility specification says (`http.server.request.duration`
+  in `s` becomes `http_server_request_duration_seconds`, a counter ends in `_total`).
+  `PC_DURATION_BUCKETS`: OpenTelemetry's buckets for HTTP durations, 5 ms to 10 s. A counter
+  ignores negative increments and every instrument ignores NaN, so recording never raises.
+  Floats are written with 15 significant digits on both compilers, because FPC 3.2.2's
+  `FloatToStrF` gives no more (measured). The output passes `promtool check metrics`
+  (Prometheus 2.53).
+
 ## [1.5.0] - 2026-10-09
 
 ### Added
