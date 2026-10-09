@@ -6,6 +6,22 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-09
+
+### Added
+
+- `TPcTracing.StartDetachedSpan(AName, AKind, AParent)`: a span that never becomes the
+  thread's current span, so it can be finished on any thread. Its parent is `AParent`, else
+  the current span, else a new trace. `TPcTracing.StartChildSpan(AParent, AName, AKind)`: a
+  child of `AParent` instead of the current span, current on this thread until it finishes
+  (then the previous current span comes back). Found by pascal-db-faa in phase D: a
+  transaction span is open while its queries run, but the commit may happen on another
+  thread. A span that is the current one and is finished and freed on another thread leaves
+  the starting thread pointing at freed memory (measured: an access violation on that
+  thread's next `Current`). With these two, the transaction is a detached span and its queries
+  name it as their parent. The unit header now states the rule: a span that becomes current is
+  finished on the thread that started it.
+
 ## [1.7.0] - 2026-10-09
 
 ### Added

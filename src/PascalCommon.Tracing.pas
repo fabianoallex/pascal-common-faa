@@ -28,7 +28,8 @@ unit PascalCommon.Tracing;
   flag without a lock (a library may ask it on every call); FromEnvironment
   reads the process environment, with an overload that takes the lookup (an
   application reading a .env file passes its own); StartSpanFromParent, for
-  a consumer that gets traceparent in a message.
+  a consumer that gets traceparent in a message. 1.8.0 added
+  StartDetachedSpan and StartChildSpan (see the rule on threads below).
 
   Decisions (unchanged from the API library):
   - Not started (or after Shutdown), every call still works: spans carry ids
@@ -45,8 +46,20 @@ unit PascalCommon.Tracing;
     alive; Finish (or freeing an unfinished span) puts the parent back. A
     request served on one thread has its server span as the current one for
     the whole handler; another thread (a pool's) starts with none, and the
-    context crosses to it explicitly (StartSpanWith, or a traceparent). A
-    span is used by the thread that started it.
+    context crosses to it explicitly (StartSpanWith, or a traceparent).
+  - A span that becomes the current one (StartSpan, StartSpanWith,
+    StartSpanFromParent, StartChildSpan) must be finished on the thread that
+    started it. This is a memory rule, not only a tracing one: Finish and
+    the destructor can clear only the calling thread's pointer, so a span
+    finished and freed on another thread leaves the first thread pointing
+    at freed memory, read by its next StartSpan or Current. Work whose end
+    happens elsewhere (a transaction committed on another thread, a message
+    acknowledged later) uses StartDetachedSpan: it never becomes the current
+    span, so it can be finished on any thread, and the spans inside it name
+    it as their parent explicitly with StartChildSpan. Found by
+    pascal-db-faa in phase D; added in 1.8.0. Any span is used by one thread
+    at a time: one handed over passes through whatever synchronizes the
+    hand-over.
   - Time: start and end in Unix nanoseconds, UTC. The wall clock is
     TClock.Now (PascalCommon.SystemContext, replaceable in tests) converted
     to UTC with DateTimeToUnix(.., False), milliseconds precision; the
@@ -194,6 +207,16 @@ type
     /// ATraceParent is invalid or empty, the same as StartSpan.
     class function StartSpanFromParent(const ATraceParent, ATraceState, AName: string;
       AKind: TPcSpanKind): IPcSpan; static;
+    /// A span that never becomes the current one, so it can be finished on
+    /// any thread (see the header). Its parent is AParent; when nil, the
+    /// current span; when there is none, it starts a new trace.
+    class function StartDetachedSpan(const AName: string; AKind: TPcSpanKind = skInternal;
+      const AParent: IPcSpan = nil): IPcSpan; static;
+    /// A child of AParent (typically a detached span), not of the current
+    /// span, and the current span of this thread until it finishes, when the
+    /// previous current span comes back. A nil AParent is StartSpan.
+    class function StartChildSpan(const AParent: IPcSpan; const AName: string;
+      AKind: TPcSpanKind = skInternal): IPcSpan; static;
     /// The current span of this thread; nil when none.
     class function Current: IPcSpan; static;
     /// The sampling decision for a new trace with this id (see the header).
@@ -258,10 +281,14 @@ type
     FRecording: Boolean;
     FFinished: Boolean;
     FStartTick: Int64;
-    // The parent, kept alive by FParent; FParentSpan is the same object, for
-    // the thread's current-span pointer.
+    // The span that was current when this one started, restored by Finish;
+    // kept alive by FParent, FParentSpan is the same object for the thread's
+    // pointer. It is the logical parent except with StartChildSpan, and nil
+    // for a detached span.
     FParent: IPcSpan;
     FParentSpan: TPcSpan;
+    // Never the current span (StartDetachedSpan).
+    FDetached: Boolean;
     procedure AddAttribute(const AAttribute: TPcSpanAttribute);
     procedure LeaveCurrent;
   public
@@ -545,7 +572,9 @@ end;
 
 procedure TPcSpan.LeaveCurrent;
 begin
-  if GCurrent = Pointer(Self) then
+  // A detached span was never current, and may be finished or freed on a
+  // thread whose pointer it must not touch.
+  if not FDetached and (GCurrent = Pointer(Self)) then
     GCurrent := Pointer(FParentSpan);
 end;
 
@@ -782,6 +811,39 @@ begin
       PcResolveTraceState(True, ATraceState), LParent.Sampled, AName, AKind)
   else
     Result := StartSpan(AName, AKind);
+end;
+
+class function TPcTracing.StartDetachedSpan(const AName: string; AKind: TPcSpanKind;
+  const AParent: IPcSpan): IPcSpan;
+var
+  LParent: IPcSpan;
+  LTraceId: string;
+  LSpan: TPcSpan;
+begin
+  LParent := AParent;
+  if LParent = nil then
+    LParent := Current;
+  if LParent <> nil then
+    LSpan := TPcSpan.Create(LParent.TraceId, PcNewSpanId, LParent.SpanId, LParent.TraceState,
+      LParent.Sampled, AName, AKind, nil)
+  else
+  begin
+    LTraceId := PcNewTraceId;
+    LSpan := TPcSpan.Create(LTraceId, PcNewSpanId, '', '', ShouldSample(LTraceId), AName, AKind,
+      nil);
+  end;
+  LSpan.FDetached := True;
+  Result := LSpan;
+end;
+
+class function TPcTracing.StartChildSpan(const AParent: IPcSpan; const AName: string;
+  AKind: TPcSpanKind): IPcSpan;
+begin
+  if AParent = nil then
+    Result := StartSpan(AName, AKind)
+  else
+    Result := StartSpanWith(AParent.TraceId, PcNewSpanId, AParent.SpanId, AParent.TraceState,
+      AParent.Sampled, AName, AKind);
 end;
 
 class function TPcTracing.Current: IPcSpan;

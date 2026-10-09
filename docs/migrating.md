@@ -153,7 +153,10 @@ pascal-api-infra-faa: `PascalApi.Otlp`'s `TOtlpHttpExporter` implements `IPcSpan
 - **Behavior:** `Enabled` no longer takes a lock; `SetName` after `Finish` is ignored (it changed
   the exported name before); `ShouldSample` reads the id as lowercase hex only (trace ids are
   always lowercase, `PascalCommon.TraceContext`). New: `StartSpanFromParent`.
-- **Minimum version:** `PASCALCOMMON_VERSION < 10700`, and `MinVersion` 1.7 in the `.lpk`.
+- **Minimum version:** `PASCALCOMMON_VERSION < 10700`, and `MinVersion` 1.7 in the `.lpk`
+  (`10800` and 1.8 for `StartDetachedSpan` and `StartChildSpan`: work that ends on another
+  thread, such as a transaction committed elsewhere, must not use a span that becomes the
+  current one; see the unit header).
 - **The tests** came with the unit (`PascalCommon.TracingTests`, all but the
   `ParseKeyValueList` one), so pascal-api-infra-faa keeps only that one.
 

@@ -4,8 +4,10 @@ unit PascalCommon.TracingTests;
   child, sampling (flag and ratio), attributes and status, the batch
   processor (bounded queue, batch size, export failures, the export thread),
   tracing not started, a remote parent from a traceparent, the current span
-  being per thread, spans finished on several threads at once, UTC Unix
-  nanoseconds and the OTEL_* options.
+  being per thread, spans finished on several threads at once, detached spans
+  and explicit children (a span finished and freed on another thread leaves
+  the starting thread's current span alone), UTC Unix nanoseconds and the
+  OTEL_* options.
 
   Most of them came from pascal-api-infra-faa's PascalApi.TracingTests with
   the unit (phase C of its observability design); the remote parent, Enabled,
@@ -71,6 +73,10 @@ type
     [Test] procedure CurrentSpan_IsPerThread;
     [Test] procedure SpansFromSeveralThreads_AllExported;
     [Test] procedure ExportThread_ExportsWithoutFlushNow;
+    [Test] procedure Detached_NotCurrent_ChildOfTheCurrentSpan;
+    [Test] procedure Detached_ExplicitParent_OrNewTrace;
+    [Test] procedure ChildSpan_ExplicitParent_RestoresThePreviousCurrent;
+    [Test] procedure Detached_FinishedAndFreedOnAnotherThread_OriginalThreadUnaffected;
     [Test] procedure UnixNano_IsUtcMilliseconds;
     [Test] procedure Options_FromEnvironment;
   end;
@@ -89,6 +95,18 @@ type
     Error: string;
     CurrentAtStart: Boolean;
     constructor Create;
+  end;
+
+  // Finishes the span it is given and drops its reference, on its own
+  // thread: the span may be freed there.
+  TFinishThread = class(TThread)
+  private
+    FSpan: IPcSpan;
+  protected
+    procedure Execute; override;
+  public
+    Error: string;
+    constructor Create(const ASpan: IPcSpan);
   end;
 
 var
@@ -136,6 +154,23 @@ begin
       C := nil;
       P := nil;
     end;
+  except
+    on E: Exception do
+      Error := E.ClassName + ': ' + E.Message;
+  end;
+end;
+
+constructor TFinishThread.Create(const ASpan: IPcSpan);
+begin
+  FSpan := ASpan;
+  inherited Create(False);
+end;
+
+procedure TFinishThread.Execute;
+begin
+  try
+    FSpan.Finish;
+    FSpan := nil;
   except
     on E: Exception do
       Error := E.ClassName + ': ' + E.Message;
@@ -566,6 +601,114 @@ begin
     FFake.Received := nil;
     LReceived.Free;
   end;
+end;
+
+procedure TTracingTests.Detached_NotCurrent_ChildOfTheCurrentSpan;
+var
+  P, D: IPcSpan;
+begin
+  P := TPcTracing.StartSpan('request', skServer);
+  D := TPcTracing.StartDetachedSpan('transaction');
+  TAssert.AssertTrue('not the current span', TPcTracing.Current = P);
+  TAssert.AssertEquals(P.TraceId, D.TraceId);
+  TAssert.AssertEquals('the current span is its parent', P.SpanId, D.ParentSpanId);
+  TAssert.AssertTrue(D.Sampled);
+  D.Finish;
+  TAssert.AssertTrue('Finish leaves the current span alone', TPcTracing.Current = P);
+  P.Finish;
+  TAssert.AssertTrue(TPcTracing.Current = nil);
+  TPcTracing.FlushNow;
+  TAssert.AssertEquals(2, Length(FFake.Spans));
+  TAssert.AssertEquals('transaction', FFake.Spans[0].Name);
+  TAssert.AssertEquals(P.SpanId, FFake.Spans[0].ParentSpanId);
+end;
+
+procedure TTracingTests.Detached_ExplicitParent_OrNewTrace;
+var
+  P, Q, D: IPcSpan;
+begin
+  P := TPcTracing.StartSpanWith('4bf92f3577b34da6a3ce929d0e0e4736', 'b7ad6b7169203331', '',
+    'vendor=1', False, 'other', skServer);
+  P.Finish;
+  Q := TPcTracing.StartSpan('current');
+  D := TPcTracing.StartDetachedSpan('d', skProducer, P);
+  TAssert.AssertEquals('AParent wins over the current span', 'b7ad6b7169203331', D.ParentSpanId);
+  TAssert.AssertEquals('4bf92f3577b34da6a3ce929d0e0e4736', D.TraceId);
+  TAssert.AssertEquals('vendor=1', D.TraceState);
+  TAssert.AssertFalse('the parent''s sampled flag', D.Sampled);
+  D.Finish;
+  Q.Finish;
+  TAssert.AssertTrue(TPcTracing.Current = nil);
+  D := TPcTracing.StartDetachedSpan('root');
+  TAssert.AssertEquals('no current span: a new trace', '', D.ParentSpanId);
+  TAssert.AssertEquals(32, Length(D.TraceId));
+  TAssert.AssertTrue(TPcTracing.Current = nil);
+  D.Finish;
+end;
+
+procedure TTracingTests.ChildSpan_ExplicitParent_RestoresThePreviousCurrent;
+var
+  P, D, C: IPcSpan;
+begin
+  P := TPcTracing.StartSpan('request', skServer);
+  D := TPcTracing.StartDetachedSpan('transaction');
+  C := TPcTracing.StartChildSpan(D, 'SELECT', skClient);
+  TAssert.AssertEquals('a child of the detached span', D.SpanId, C.ParentSpanId);
+  TAssert.AssertEquals(D.TraceId, C.TraceId);
+  TAssert.AssertTrue('the current span while open', TPcTracing.Current = C);
+  C.Finish;
+  TAssert.AssertTrue('the previous current span comes back', TPcTracing.Current = P);
+  C := TPcTracing.StartChildSpan(nil, 'plain');
+  TAssert.AssertEquals('nil parent: StartSpan', P.SpanId, C.ParentSpanId);
+  C.Finish;
+  D.Finish;
+  P.Finish;
+  TPcTracing.FlushNow;
+  TAssert.AssertEquals(4, Length(FFake.Spans));
+  TAssert.AssertEquals('SELECT', FFake.Spans[0].Name);
+  TAssert.AssertEquals(D.SpanId, FFake.Spans[0].ParentSpanId);
+  TAssert.AssertTrue(FFake.Spans[0].Kind = skClient);
+end;
+
+procedure TTracingTests.Detached_FinishedAndFreedOnAnotherThread_OriginalThreadUnaffected;
+var
+  P, D, C, N: IPcSpan;
+  LThread: TFinishThread;
+  LRequestId, LTransactionId, LError: string;
+begin
+  P := TPcTracing.StartSpan('request', skServer);
+  LRequestId := P.SpanId;
+  D := TPcTracing.StartDetachedSpan('transaction');
+  LTransactionId := D.SpanId;
+  C := TPcTracing.StartChildSpan(D, 'INSERT', skClient);
+  C.Finish;
+  C := nil;
+  // The commit happens on another thread, which holds the last reference:
+  // the span is freed there.
+  LThread := TFinishThread.Create(D);
+  D := nil;
+  try
+    LThread.WaitFor;
+    LError := LThread.Error;
+  finally
+    LThread.Free;
+  end;
+  TAssert.AssertEquals('', LError);
+  TAssert.AssertEquals('this thread''s current span is still the request', LRequestId,
+    CurrentSpanId);
+  N := TPcTracing.StartSpan('after');
+  TAssert.AssertEquals(LRequestId, N.ParentSpanId);
+  N.Finish;
+  N := nil;
+  P.Finish;
+  P := nil;
+  TAssert.AssertEquals('', CurrentSpanId);
+  TPcTracing.FlushNow;
+  TAssert.AssertEquals(4, Length(FFake.Spans));
+  TAssert.AssertEquals('INSERT', FFake.Spans[0].Name);
+  TAssert.AssertEquals(LTransactionId, FFake.Spans[0].ParentSpanId);
+  TAssert.AssertEquals('transaction', FFake.Spans[1].Name);
+  TAssert.AssertEquals(LRequestId, FFake.Spans[1].ParentSpanId);
 end;
 
 procedure TTracingTests.UnixNano_IsUtcMilliseconds;
