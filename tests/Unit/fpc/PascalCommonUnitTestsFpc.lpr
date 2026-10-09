@@ -34,6 +34,7 @@ uses
   PascalCommon.Utf8Tests,
   PascalCommon.TraceContextTests,
   PascalCommon.MetricsTests,
+  PascalCommon.TracingTests,
   PascalCommon.JsonMapperOptionalsTests;
 
 var

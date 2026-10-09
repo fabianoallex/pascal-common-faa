@@ -6,6 +6,25 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-09
+
+### Added
+
+- `PascalCommon.Tracing`: spans, moved from pascal-api-infra-faa's `PascalApi.Tracing` (phase C
+  of its observability design, unstable there) at the start of phase D, so pascal-db-faa,
+  pascal-redis-faa and pascal-amqp-faa can open spans that join an API's trace.
+  `TPcTracing` (`Start`/`Shutdown`, `StartSpan`, `StartSpanWith`, `Current`, `ShouldSample`,
+  `FlushNow`, `DroppedCount`, `PendingCount`), `IPcSpan`, `IPcSpanExporter`, `TPcSpanData`,
+  `TPcTracingOptions` (`Default`, `FromEnvironment` with the `OTEL_*` variables),
+  `PcUnixNanoOfLocal`, `TPcLogProc`. Not started, every call still works and exports nothing.
+  Changes on the way in: the `Pc` prefixes; `Enabled` reads a flag without a lock;
+  `FromEnvironment` reads the process environment, with an overload that takes the lookup
+  (`TPcEnvironmentLookup`); `StartSpanFromParent`, a child of the remote span in a
+  `traceparent` (or the same as `StartSpan` when it is invalid), for a message consumer;
+  `SetName` after `Finish` is ignored like the other setters. The OTLP exporter stays in
+  pascal-api-infra-faa (it needs an HTTP client and a JSON writer); `docs/migrating.md` has the
+  name map.
+
 ## [1.6.0] - 2026-10-09
 
 ### Added

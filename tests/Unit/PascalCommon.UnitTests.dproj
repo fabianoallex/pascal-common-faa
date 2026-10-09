@@ -124,6 +124,7 @@
         <DCCReference Include="..\..\src\PascalCommon.Utf8.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.TraceContext.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Metrics.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.Tracing.pas"/>
         <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas"/>
         <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas"/>
         <DCCReference Include="..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas"/>
@@ -137,6 +138,7 @@
         <DCCReference Include="PascalCommon.Utf8Tests.pas"/>
         <DCCReference Include="PascalCommon.TraceContextTests.pas"/>
         <DCCReference Include="PascalCommon.MetricsTests.pas"/>
+        <DCCReference Include="PascalCommon.TracingTests.pas"/>
         <DCCReference Include="PascalCommon.JsonMapperOptionalsTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

@@ -121,6 +121,42 @@ in the middle of a line from the other. Every library must use this unit, and ke
 - **The library's own tests of its copy** (if any) go away: this repository's
   `PascalCommon.SafeLogTests` covers the unit.
 
+## Tracing (1.7.0)
+
+`PascalCommon.Tracing` replaces pascal-api-infra-faa's `PascalApi.Tracing` (phase C of its
+observability design). It moved so the sibling libraries can open spans that join an API's
+trace (phase D) without depending on the API library. The exporters stay in
+pascal-api-infra-faa: `PascalApi.Otlp`'s `TOtlpHttpExporter` implements `IPcSpanExporter`.
+
+| Before (`PascalApi.Tracing`) | After (`PascalCommon.Tracing`) |
+|---|---|
+| `TTracing` | `TPcTracing` (same class methods) |
+| `ISpan`, `ISpanExporter` | `IPcSpan`, `IPcSpanExporter` (new GUIDs) |
+| `TSpanData`, `TSpanDataArray` | `TPcSpanData`, `TPcSpanDataArray` |
+| `TSpanKind`, `TSpanStatus`, `TSpanAttributeType` | `TPcSpanKind`, `TPcSpanStatus`, `TPcSpanAttributeType` (same values: `skServer`, `ssError`, `satInt`...) |
+| `TSpanAttribute`, `TSpanAttributes` | `TPcSpanAttribute`, `TPcSpanAttributes` |
+| `TTracingOptions` | `TPcTracingOptions` |
+| `UnixNanoOfLocal` | `PcUnixNanoOfLocal` |
+| `TLogProc` (for `Start`'s `AOnError`) | `TPcLogProc`, the same signature |
+| `ParseKeyValueList` | stays in pascal-api-infra-faa (only the exporter uses it) |
+
+- **`TTracingOptions.FromEnvironment`** read the variables through `TAppConfig`, so a `.env`
+  file counted. `TPcTracingOptions.FromEnvironment(AName, AVersion)` reads only the process
+  environment; to keep the `.env`, pass a lookup:
+  `TPcTracingOptions.FromEnvironment(AName, AVersion, ReadConfig)`, where `ReadConfig` is a
+  plain function `(const AName: string): string` that returns `TAppConfig.Get(AName, '')`.
+  The parsing and the limits are the same.
+- **`TLogProc` and `TPcLogProc`** have the same signature but are two declarations (on Delphi,
+  two `reference to` types). Declaring `TLogProc = TPcLogProc` in `PascalApi.Http` makes them
+  one type, so a `TLogProc` goes to `TPcTracing.Start` as it is, on both compilers, without
+  depending on how each compiler matches two procedural types.
+- **Behavior:** `Enabled` no longer takes a lock; `SetName` after `Finish` is ignored (it changed
+  the exported name before); `ShouldSample` reads the id as lowercase hex only (trace ids are
+  always lowercase, `PascalCommon.TraceContext`). New: `StartSpanFromParent`.
+- **Minimum version:** `PASCALCOMMON_VERSION < 10700`, and `MinVersion` 1.7 in the `.lpk`.
+- **The tests** came with the unit (`PascalCommon.TracingTests`, all but the
+  `ParseKeyValueList` one), so pascal-api-infra-faa keeps only that one.
+
 ## Names
 
 `Xxx` stands for each library's prefix: `Pdb` (pascal-db-faa), `Pipe` (pipes), `Amqp` (amqp),
