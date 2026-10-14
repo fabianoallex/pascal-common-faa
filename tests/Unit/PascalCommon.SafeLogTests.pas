@@ -1,8 +1,9 @@
 unit PascalCommon.SafeLogTests;
 
 { Tests for PascalCommon.SafeLog: what SafeWriteln writes, that it writes
-  nothing (and doesn't format) without a console, and that concurrent writers
-  don't corrupt each other's lines.
+  nothing (and doesn't format) without a console, that each line reaches a
+  redirected stdout before the next write, and that concurrent writers don't
+  corrupt each other's lines.
 
   The output is captured with a text-file driver of the test's own: Output is
   reassigned to a device whose InOutFunc appends the buffer to a memory stream.
@@ -17,6 +18,15 @@ unit PascalCommon.SafeLogTests;
   Output; on Delphi it is one global, redirected once by the test. The main
   thread's Output record is saved byte for byte and copied back afterwards: its
   BufPtr points into the record itself, so the copy stays valid.
+
+  The file test redirects Output (the main thread's) to a real temporary file
+  with AssignFile, so the RTL's own file path is the one tested: on both
+  compilers a disk file gets a FlushFunc that writes nothing (gotchas 8 and
+  9). It reads the file through a second handle after each SafeWriteln,
+  without closing Output; both RTLs open the file sharing reads. It fails on
+  Delphi without SafeWriteln's Flush (before 1.8.1): the short line doesn't
+  reach the file at all, and after the long one the file holds only the first
+  256 bytes of the output, two Delphi buffers.
 
   IsConsole is set explicitly in every test and restored: the FPC GUI runner on
   Windows runs without a console.
@@ -48,10 +58,16 @@ type
     [Test] procedure FormatOverload_FormatsTheLine;
     [Test] procedure NoConsole_WritesNothing;
     [Test] procedure NoConsole_FormatOverloadDoesntFormat;
+    [Test] procedure FileOutput_EachLineReachesTheFileBeforeTheNextWrite;
     [Test] procedure ConcurrentWriters_EveryLineWholeAndInOrder;
   end;
 
 implementation
+
+{$IFNDEF FPC}
+uses
+  System.IOUtils;
+{$ENDIF}
 
 const
   NUM_WRITERS = 8;
@@ -153,6 +169,37 @@ begin
   CloseFile(Output);
   Move(GSavedOutput, Output, SizeOf(TTextRec));
   SetString(LBytes, PAnsiChar(GCaptured.Memory), GCaptured.Size);
+  Result := string(LBytes);
+end;
+
+function TempFilePath: string;
+var
+  LGuid: TGUID;
+begin
+  CreateGUID(LGuid);
+  {$IFDEF FPC}
+  Result := IncludeTrailingPathDelimiter(GetTempDir);
+  {$ELSE}
+  Result := IncludeTrailingPathDelimiter(TPath.GetTempPath);
+  {$ENDIF}
+  Result := Result + 'pascalcommon-safelog-' + Copy(GUIDToString(LGuid), 2, 36) + '.txt';
+end;
+
+// Reads the whole file through a handle of its own, while another may still
+// be writing it.
+function ReadWholeFile(const APath: string): string;
+var
+  LStream: TFileStream;
+  LBytes: AnsiString;
+begin
+  LStream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(LBytes, LStream.Size);
+    if LStream.Size > 0 then
+      LStream.ReadBuffer(LBytes[1], LStream.Size);
+  finally
+    LStream.Free;
+  end;
   Result := string(LBytes);
 end;
 
@@ -316,6 +363,37 @@ begin
     IsConsole := LOldIsConsole;
   end;
   TAssert.AssertTrue('returned without formatting', True);
+end;
+
+procedure TSafeLogTests.FileOutput_EachLineReachesTheFileBeforeTheNextWrite;
+var
+  LOldIsConsole: Boolean;
+  LSaved: TTextRec;
+  LPath, LShort, LLong, LAfterShort, LAfterLong: string;
+begin
+  LShort := 'a short line';
+  // longer than two Delphi buffers, like the access-log line that showed it
+  LLong := '{"line":"long",' + StringOfChar('x', LINE_WIDTH) + '"dur":1}';
+  LPath := TempFilePath;
+  LOldIsConsole := IsConsole;
+  IsConsole := True;
+  Move(Output, LSaved, SizeOf(TTextRec));
+  AssignFile(Output, LPath);
+  Rewrite(Output);
+  try
+    SafeWriteln(LShort);
+    LAfterShort := ReadWholeFile(LPath);
+    SafeWriteln(LLong);
+    LAfterLong := ReadWholeFile(LPath);
+  finally
+    CloseFile(Output);
+    Move(LSaved, Output, SizeOf(TTextRec));
+    IsConsole := LOldIsConsole;
+    DeleteFile(LPath);
+  end;
+  TAssert.AssertEquals('after the short line', LShort + sLineBreak, LAfterShort);
+  TAssert.AssertEquals('after the long line', LShort + sLineBreak + LLong + sLineBreak,
+    LAfterLong);
 end;
 
 procedure TSafeLogTests.ConcurrentWriters_EveryLineWholeAndInOrder;

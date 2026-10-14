@@ -134,7 +134,8 @@ each thread has its own text record, with its own buffer, over the same handle. 
 (`rtl/inc/text.inc`) sets a `FlushFunc` only when the handle is a device, so for a file or a pipe
 `Writeln` leaves the line in the thread's buffer. The buffer goes out when it fills (256 bytes),
 in the middle of a line, whenever that thread next writes or ends: the lock around the `Writeln`
-guards nothing. On Delphi, `Output` is one global with one buffer, so a lock is enough there.
+guards nothing. On Delphi, `Output` is one global with one buffer, so a lock is enough to keep
+lines whole, but not to get them out (gotcha 9).
 
 **Fix.** `Flush(Output)` inside the lock, after the `Writeln`. `Flush` always calls the
 record's `InOutFunc`, whatever `FlushFunc` is. `PascalCommon.SafeLog` does this on FPC since
@@ -142,3 +143,29 @@ record's `InOutFunc`, whatever `FlushFunc` is. `PascalCommon.SafeLog` does this 
 device whose `FlushFunc` does nothing, like a pipe's, so it fails on FPC without the `Flush`, on
 Windows too. (A custom text device for Delphi can't leave `FlushFunc` nil, as FPC's RTL does:
 Delphi calls it without checking, an access violation at address 0.) Code that redirects `Output` with `AssignFile` on FPC changes only the calling thread's.
+
+
+## 9. Delphi on Windows: the last line written to a redirected stdout stays cut
+
+**Symptom.** A Delphi console program with standard output redirected to a file or a pipe
+(Docker, a service wrapper, `> log`) writes a line with `Writeln`, and the file shows it cut,
+or not at all, until more output comes; if the process dies, it is lost. Seen from
+pascal-api-infra-faa on Delphi 12 (Win32 and Win64): a 300-byte access-log line stayed cut at
+`...,"dur` until the next one, while a shorter line before it had come out whole. On a console it
+doesn't show.
+
+**Cause.** `TextOpen` in Delphi's `System.pas` (Windows branch) sets `FlushFunc` to a no-op and
+replaces it with the writing function only when `GetFileType` of the handle is
+`FILE_TYPE_CHAR`, a console. `Writeln` ends with a call to `FlushFunc`, so on a file or a pipe it
+flushes nothing. The text buffer (`TTextBuf`) is 128 bytes, and `_WriteBytes` writes it out each
+time it fills. What reaches the handle is the output so far cut down to a multiple of 128 bytes.
+Whether a given line shows up whole depends on whether a 128-byte boundary has been passed after
+its end, not on its length: the short line came out whole because the long one that followed
+pushed it out. (Delphi on Linux sets the writing `FlushFunc` for standard output always, so it
+doesn't happen there.)
+
+**Fix.** `Flush(Output)` after the `Writeln`. `Flush` calls the record's `InOutFunc`, not its
+`FlushFunc`, so it writes on a file and a pipe too; on a console the buffer is already empty and
+it does nothing. `PascalCommon.SafeLog` does it on both compilers since 1.8.1 (only on FPC before,
+for gotcha 8). Its test redirects `Output` to a temporary file and reads the file, without
+closing `Output`, after each `SafeWriteln`.

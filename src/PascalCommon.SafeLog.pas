@@ -24,16 +24,33 @@ unit PascalCommon.SafeLog;
   event callbacks pascal-db-faa offers), not rely on this. On FPC for Linux
   IsConsole is always True, and Writeln works there in any binary.
 
-  FPC gotcha (docs/gotchas.md, gotcha 8): in FPC, Output is a threadvar. Each
-  thread has its own text record and buffer over the same handle, and when
-  standard output is not a terminal (a file, a pipe: Docker, systemd) the RTL
-  doesn't flush it on Writeln. The lock alone then guards nothing: each thread's
-  buffer goes out when it fills, in the middle of a line, whenever that thread
-  next writes or ends. Measured 2026-10-06 on Debian bookworm FPC 3.2.2, 8
-  threads writing 2,000 lines each under one lock, stdout to a file: 2,165 of
-  16,000 lines corrupted; none with a Flush(Output) inside the lock. So on FPC
-  SafeWriteln flushes before releasing the lock. Delphi's Output is a single
-  global with one buffer, so the lock is enough there and nothing changed.
+  SafeWriteln flushes Output before releasing the lock, on both compilers.
+  When standard output is not a terminal (a file, a pipe: Docker, systemd, a
+  Windows service wrapper) neither RTL flushes it on Writeln; the text buffer
+  goes out only when it fills.
+
+  FPC (docs/gotchas.md, gotcha 8): Output is a threadvar. Each thread has its
+  own text record and 256-byte buffer over the same handle, so without the
+  flush the lock guards nothing: each thread's buffer goes out when it fills,
+  in the middle of a line, whenever that thread next writes or ends. Measured
+  2026-10-06 on Debian bookworm FPC 3.2.2, 8 threads writing 2,000 lines each
+  under one lock, stdout to a file: 2,165 of 16,000 lines corrupted; none with
+  a Flush(Output) inside the lock.
+
+  Delphi (gotcha 9): Output is one global, so lines don't interleave, but on
+  Windows the RTL's TextOpen installs a flushing FlushFunc only when
+  GetFileType reports a character device (a console); for a file or a pipe it
+  is a no-op, and the buffer is 128 bytes. What reaches the handle is then the
+  output so far cut down to a multiple of 128 bytes: the end of the last line
+  waits for later output, and is lost if the process dies. Whether one line
+  shows up whole depends only on where it ends relative to those 128-byte
+  boundaries, not on its length. Seen from pascal-api-infra-faa on Delphi 12
+  (Win32 and Win64), a server's stdout redirected to a file: a 300-byte
+  access-log line stayed cut until the next one. Delphi on Linux flushes
+  standard output on every Writeln already; the flush costs nothing there, nor
+  on a console, where Writeln has just emptied the buffer. Flush(Output) (not
+  the FlushFunc Writeln calls) goes through InOutFunc, so it writes in every
+  case. Before 1.8.1 only the FPC build flushed.
 
   The two copies this replaces, compared 2026-10-06 (pascal-db-faa v0.11.0,
   delphi-api-infra-faa v0.3.0): the same two overloads, the same bodies, the
@@ -43,7 +60,7 @@ unit PascalCommon.SafeLog;
   System.SyncObjs) and no .inc, so it didn't build on FPC; its comments were in
   Portuguese and pointed to Common.FileLog for persistent logging, where
   PascalDb.SafeLog's pointed to the pool and migration event callbacks. Neither
-  flushed on FPC, so both had the problem above. }
+  flushed, so both had the problems above. }
 
 interface
 
@@ -73,11 +90,10 @@ begin
   GConsoleLock.Enter;
   try
     Writeln(AText);
-    {$IFDEF FPC}
-    // Output is per thread on FPC: send this thread's buffer out while the
-    // lock is held (unit header)
+    // a file or a pipe isn't flushed by Writeln on either compiler, and
+    // Output is per thread on FPC: send the buffer out while the lock is held
+    // (unit header)
     Flush(Output);
-    {$ENDIF}
   finally
     GConsoleLock.Leave;
   end;

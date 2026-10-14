@@ -6,6 +6,22 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-10-14
+
+### Fixed
+
+- `SafeWriteln` didn't flush on Delphi. With standard output redirected to a file or a pipe
+  (Docker, a service wrapper), the end of the last line written stayed in the RTL's buffer until
+  more output came, and was lost if the process died. Found by pascal-api-infra-faa on Delphi 12
+  (Win32 and Win64): a 300-byte access-log line stayed cut at `...,"dur`. Cause (new gotcha 9):
+  on Windows, Delphi's RTL flushes `Writeln` only when the handle is a console, and its text
+  buffer is 128 bytes, so what reaches a file is the output cut down to a multiple of 128 bytes;
+  a line shows up whole only once later output pushes a boundary past its end, whatever its
+  length. `SafeWriteln` now calls `Flush(Output)` inside the lock on both compilers, as it did on
+  FPC since 1.3.0. New test `FileOutput_EachLineReachesTheFileBeforeTheNextWrite`: redirects
+  `Output` to a temporary file and reads it, without closing `Output`, after each line; checked
+  to fail without the `Flush` (on FPC, with the flush removed on purpose).
+
 ## [1.8.0] - 2026-10-09
 
 ### Added
