@@ -169,3 +169,26 @@ doesn't happen there.)
 it does nothing. `PascalCommon.SafeLog` does it on both compilers since 1.8.1 (only on FPC before,
 for gotcha 8). Its test redirects `Output` to a temporary file and reads the file, without
 closing `Output`, after each `SafeWriteln`.
+
+## 10. FPC on Unix: `AnsiUpperCase` leaves accented letters alone, depending on the locale
+
+**Symptom.** `AnsiUpperCase('são paulo')` gives `'SãO PAULO'` on FPC 3.2.2/Linux (x86_64 and
+i386), while it gives `'SÃO PAULO'` on Delphi and on FPC/Windows. Same for `AnsiLowerCase`.
+Found by the first version of `TOptionals.Upper`/`Lower` (1.9.0, unreleased), in the Docker
+suite.
+
+**Cause.** On Unix, `AnsiUpperCase` goes through the widestring manager, `cwstring`, which maps
+case with the C library under the process locale. The container runs without `LANG` (locale
+"C"), where only ASCII has a case mapping. Measured with the same binary: without `LANG`,
+`'SãO PAULO'`; with `LANG=C.UTF-8 LC_ALL=C.UTF-8`, `'SÃO PAULO'`. `cwstring` and
+`SetMultiByteConversionCodePage(CP_UTF8)` were both in place: it isn't the code page. So the
+result depends on an environment variable of the machine the program runs on, and a service in a
+container would store `SãO PAULO` without any error.
+
+**Fix.** On FPC, `Character.ToUpper`/`ToLower` on a `UnicodeString`: the `Character` unit
+(rtl-objpas) uses the RTL's own Unicode tables and ignores the locale. Measured right without
+`LANG`: `'são paulo ção ñ ü'` → `'SÃO PAULO ÇÃO Ñ Ü'`, and back to lower. Cost: the tables,
+about 240 KB in a Linux binary without smart linking (whether or not the function is called) and
+about 90 KB with `-XX -CX`. `PascalCommon.Optionals` does this since 1.9.0 (`{$IFDEF FPC}`; Delphi
+keeps `AnsiUpperCase`/`AnsiLowerCase`). Its test runs `'são paulo'` on every platform, and the
+Linux CI container has no `LANG`, so a return to the locale-dependent call fails there.

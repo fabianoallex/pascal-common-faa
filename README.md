@@ -30,7 +30,7 @@ as ARM.
 | `PascalCommon.TraceContext` | W3C Trace Context: new trace and span ids (`PcNewTraceId`, `PcNewSpanId`, from the OS random source), validation, and `traceparent`/`tracestate` parse and format (`PcTryParseTraceParent`, `PcFormatTraceParent`, `PcResolveTraceState`) |
 | `PascalCommon.Metrics` | Counter, up-down counter, gauge and histogram with labels, a registry (`PcMetrics` is the process-wide one), and the Prometheus text exposition (`PcPrometheusText`). OpenTelemetry names and units (`http.server.request.duration`, `s`) become Prometheus names (`http_server_request_duration_seconds`); recording is lock-free on a series |
 | `PascalCommon.Tracing` | Spans: `TPcTracing.StartSpan` (a child of the thread's current span), `StartSpanWith`, `StartSpanFromParent` (from a `traceparent` header), `StartDetachedSpan` (never the current span, finished on any thread) with `StartChildSpan` (an explicit parent), attributes and status; parent-based sampling with a ratio; a batch processor that hands finished spans to an `IPcSpanExporter` on its own thread. The exporter (OTLP over HTTP) lives in pascal-api-infra-faa |
-| `PascalCommon.Optionals` | Optional and nullable types: `IOptXxx` ("was it provided?"), `INullXxx` ("is it null?") and `IOptNullXxx` (both), for String, Integer, Int64, Single, Double, Currency, TDateTime, Boolean and TGUID, with `TOptionals.Safe` |
+| `PascalCommon.Optionals` | Optional and nullable types: `IOptXxx` ("was it provided?"), `INullXxx` ("is it null?") and `IOptNullXxx` (both), for String, Integer, Int64, Single, Double, Currency, TDateTime, Boolean and TGUID, with `TOptionals.Safe`, and string normalizers that keep the state (`TOptionals.Trim`, `Upper`, `Lower`, `NullIfEmpty`, `UndefinedIfEmpty`, `Map`) |
 | `PascalCommon.JsonMapper.Optionals` | Optional bridge: a [pascal-jsonmapper-faa](https://github.com/fabianoallex/pascal-jsonmapper-faa) converter for the optional types. Separate package |
 
 ```pascal
@@ -47,6 +47,39 @@ begin
   PcAtomicAdd64(LCount, 10);
 end;
 ```
+
+### Normalizing an optional string without an `if`
+
+`TOptionals.Trim`, `Upper` and `Lower` take an `IOptString`, `INullString` or `IOptNullString`
+and return the same flavor. Undefined stays Undefined and Null stays Null. Only a value that is
+present is changed. `nil` reads as it does in `Safe`, so the result is never `nil`. The result
+can go straight to a parameter, a message or a comparison:
+
+```pascal
+// DTO of a PATCH: Name, State: IOptString; Nickname: IOptNullString
+LQuery.Params.OptStrings['NAME']  := TOptionals.Trim(LDto.Name);
+LQuery.Params.OptStrings['STATE'] := TOptionals.Upper(TOptionals.Trim(LDto.State));
+LNickname := TOptionals.NullIfEmpty(TOptionals.Trim(LDto.Nickname)); // '   ' becomes Null
+```
+
+- `NullIfEmpty` (`INullString`, `IOptNullString`) turns `''` into Null.
+- `UndefinedIfEmpty` (`IOptString`, `IOptNullString`) turns `''` into Undefined.
+- Neither one trims: compose with `Trim` to treat blanks as empty.
+- `Upper`/`Lower` map every Unicode letter (`'são paulo'` → `'SÃO PAULO'`) on both compilers
+  whatever the process locale (on FPC through the `Character` unit; see `docs/gotchas.md`,
+  gotcha 10).
+- `Map(AValue, AFunc)` applies a function of your own to a present value. `AFunc` is a
+  `TPcStringFunc = function(const AValue: string): string`: a plain function, the same on both
+  compilers, because FPC 3.2.2 has no closures.
+
+```pascal
+function OnlyDigits(const AValue: string): string;
+...
+LZip := TOptionals.Map(LDto.Zip, OnlyDigits);
+```
+
+Only the string optionals have normalizers. The other types get theirs when a consumer needs
+them.
 
 ## Installing
 

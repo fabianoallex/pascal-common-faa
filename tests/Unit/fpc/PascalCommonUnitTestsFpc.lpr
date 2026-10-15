@@ -29,6 +29,7 @@ uses
   PascalCommon.SystemContextTests,
   PascalCommon.ClockCacheTests,
   PascalCommon.OptionalsTests,
+  PascalCommon.OptionalsNormalizeTests,
   PascalCommon.ThreadPoolTests,
   PascalCommon.SafeLogTests,
   PascalCommon.Utf8Tests,

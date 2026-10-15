@@ -6,6 +6,35 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-15
+
+### Added
+
+- String normalizers for the optionals: `TOptionals.Trim`, `Upper` and `Lower` (for
+  `IOptString`, `INullString` and `IOptNullString`), `NullIfEmpty` (`INullString`,
+  `IOptNullString`), `UndefinedIfEmpty` (`IOptString`, `IOptNullString`), and
+  `Map(AValue, AFunc)` with `TPcStringFunc = function(const AValue: string): string`. The
+  result keeps the state: Undefined stays Undefined, Null stays Null, `nil` reads as in `Safe`
+  (the result is never `nil`), and only a present value is transformed. An unchanged value
+  returns the same instance. A state the flavor can't express but its object can is kept as it
+  is: `TOptNullString.Null` held by an `IOptString` stays Null instead of becoming `''`, and
+  `TOptNullString.Undefined` held by an `INullString` stays Undefined.
+  `Map` with `AFunc = nil` raises `EArgumentException`.
+  Found by pascal-api-infra-faa (sample 02, `PATCH /cities/:code`). The DTO's name needed
+  `Trim` and its state `UpperCase(Trim(...))`. Without a way to transform the value inside the
+  optional, the code went back to `if LName.HasValue then ...`, or the normalization moved
+  into the SQL, which doesn't help an AMQP message, a JSON response or an in-memory comparison.
+  - **Why `Map` takes a plain function pointer.** It doesn't follow `PASCALCOMMON_FUNCREFS`.
+    That type is `of object` on FPC, so a plain function a Delphi caller passes to the
+    `reference to` type would compile on Delphi and fail on FPC.
+  - **Case mapping on FPC.** `Upper`/`Lower` use `AnsiUpperCase`/`AnsiLowerCase` on Delphi and
+    the `Character` unit on FPC. On FPC/Unix, `AnsiUpperCase` follows the process locale and
+    left `'são paulo'` as `'SãO PAULO'` in a container without `LANG` (new gotcha 10). The cost
+    is the `Character` tables in FPC binaries, measured on Linux: about 240 KB without smart
+    linking, about 90 KB with `-XX -CX`.
+  - **What wasn't added.** The other eight types got no normalizers (no consumer needs one
+    yet), and the JSON bridge is unchanged: it doesn't trim on reading.
+
 ## [1.8.1] - 2026-10-14
 
 ### Fixed

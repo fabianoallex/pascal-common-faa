@@ -18,6 +18,17 @@
   for small integers + TClockCache for the rest), with its own lock — which
   is why From is safe under concurrency.
 
+  TOptionals.Trim/Upper/Lower/NullIfEmpty/UndefinedIfEmpty/Map (1.9.0)
+  normalize a string optional without opening it with an if: the result keeps
+  the state (Undefined, Null or a value) and only a present value changes, so
+  it can go straight to a parameter, a message or a comparison. Only string
+  has them: it is the measured case (a PATCH DTO in pascal-api-infra-faa);
+  the other types get theirs when a consumer needs them, as additions. Map
+  takes a plain function pointer (TPcStringFunc) because FPC 3.2.2 has no
+  closures, and "of object" there would make a Delphi caller's plain function
+  fail to build on FPC; SysUtils.Trim is overloaded, which is one reason the
+  common normalizers are named methods here.
+
   Dual-compiler: the cache-key comparers for Single/Double are named
   functions (TEqualityComparer<T>.Construct doesn't accept a closure on FPC
   3.2.2, and the IEqualityComparer<T> signature differs — constref/UInt32 on
@@ -209,10 +220,42 @@ type
     property DecimalPlaces: Integer read GetDecimalPlaces;
   end;
 
+  /// A string transformation for TOptionals.Map. A plain function pointer,
+  /// not PASCALCOMMON_FUNCREFS: "of object" on FPC would refuse the plain
+  /// function a Delphi caller passes to a "reference to", so code written on
+  /// one compiler wouldn't build on the other.
+  TPcStringFunc = function(const AValue: string): string;
+
   { TOptionals Helper }
 
   TOptionals = class
   public
+    // String normalizers (1.9.0). Each keeps the state: Undefined stays
+    // Undefined, Null stays Null, nil reads as in Safe, and only a present
+    // value is transformed. The result is never nil; an unchanged value
+    // returns the same instance.
+    class function Trim(const AValue: IOptString): IOptString; overload; static;
+    class function Trim(const AValue: INullString): INullString; overload; static;
+    class function Trim(const AValue: IOptNullString): IOptNullString; overload; static;
+    /// Unicode-aware and independent of the process locale on both
+    /// compilers: 'são paulo' gives 'SÃO PAULO'.
+    class function Upper(const AValue: IOptString): IOptString; overload; static;
+    class function Upper(const AValue: INullString): INullString; overload; static;
+    class function Upper(const AValue: IOptNullString): IOptNullString; overload; static;
+    /// Lowercase, with the same rules as Upper.
+    class function Lower(const AValue: IOptString): IOptString; overload; static;
+    class function Lower(const AValue: INullString): INullString; overload; static;
+    class function Lower(const AValue: IOptNullString): IOptNullString; overload; static;
+    /// '' becomes Null. It doesn't trim: NullIfEmpty(Trim(X)) for blanks.
+    class function NullIfEmpty(const AValue: INullString): INullString; overload; static;
+    class function NullIfEmpty(const AValue: IOptNullString): IOptNullString; overload; static;
+    /// '' becomes Undefined. It doesn't trim: UndefinedIfEmpty(Trim(X)).
+    class function UndefinedIfEmpty(const AValue: IOptString): IOptString; overload; static;
+    class function UndefinedIfEmpty(const AValue: IOptNullString): IOptNullString; overload; static;
+    /// AFunc applied to a present value. AFunc = nil raises EArgumentException.
+    class function Map(const AValue: IOptString; AFunc: TPcStringFunc): IOptString; overload; static;
+    class function Map(const AValue: INullString; AFunc: TPcStringFunc): INullString; overload; static;
+    class function Map(const AValue: IOptNullString; AFunc: TPcStringFunc): IOptNullString; overload; static;
     // String
     class function Safe(const AValue: IOptString): IOptString; overload; static;
     class function Safe(const AValue: INullString): INullString; overload; static;
@@ -497,6 +540,11 @@ type
 
 implementation
 
+{$IFDEF FPC}
+uses
+  Character;
+{$ENDIF}
+
 const
   // TGuid.Empty comes from Delphi's TGuidHelper record helper, which doesn't
   // exist in FPC 3.2.2 — a typed constant works on both.
@@ -539,7 +587,207 @@ begin
   Result := {$IFDEF FPC}UInt32(LHash){$ELSE}LHash{$ENDIF};
 end;
 
+{ String normalizers.
+
+  The state is read through the flavor's own interface (HasValue or IsNull)
+  and, for the state that flavor can't express, through the object behind
+  it: TOptNullString implements the three flavors, so TOptNullString.Null
+  assigned to an IOptString has HasValue = True and Value = '', and
+  TOptNullString.Undefined assigned to an INullString has IsNull = False and
+  Value = ''. Without the Supports check, Trim would turn either one into a
+  made-up ''. They are returned unchanged instead. }
+
+function NormTrim(const AValue: string): string;
+begin
+  Result := SysUtils.Trim(AValue);
+end;
+
+{ Upper and lower case. On Delphi, AnsiUpperCase/AnsiLowerCase map every
+  Unicode letter. On FPC/Unix they go through cwstring, which follows the
+  process locale: measured on FPC 3.2.2/Linux in a container without LANG
+  (locale "C"), AnsiUpperCase('são paulo') gave 'SãO PAULO', and with
+  LANG=C.UTF-8 the same binary gave 'SÃO PAULO' (gotcha 10). So FPC uses the
+  Character unit, whose tables come with the RTL and ignore the locale. The
+  string goes through UnicodeString, which converts from and back to the
+  string's own code page. Cost: Character's tables, about 240 KB in a Linux
+  binary without smart linking, about 90 KB with -XX -CX (measured). }
+
+function NormUpper(const AValue: string): string;
+begin
+  {$IFDEF FPC}
+  Result := string(Character.ToUpper(UnicodeString(AValue)));
+  {$ELSE}
+  Result := AnsiUpperCase(AValue);
+  {$ENDIF}
+end;
+
+function NormLower(const AValue: string): string;
+begin
+  {$IFDEF FPC}
+  Result := string(Character.ToLower(UnicodeString(AValue)));
+  {$ELSE}
+  Result := AnsiLowerCase(AValue);
+  {$ENDIF}
+end;
+
+function IsHiddenNull(const AValue: IInterface): Boolean;
+var
+  LNullable: INullableBase;
+begin
+  Result := Supports(AValue, INullableBase, LNullable) and LNullable.IsNull;
+end;
+
+function IsHiddenUndefined(const AValue: IInterface): Boolean;
+var
+  LOptional: IOptionalBase;
+begin
+  Result := Supports(AValue, IOptionalBase, LOptional) and not LOptional.HasValue;
+end;
+
+procedure CheckFunc(AFunc: TPcStringFunc);
+begin
+  if not Assigned(AFunc) then
+    raise EArgumentException.Create('TOptionals.Map: AFunc is nil');
+end;
+
+function MapOpt(const AValue: IOptString; AFunc: TPcStringFunc): IOptString;
+var
+  LOld, LNew: string;
+begin
+  if not Assigned(AValue) or not AValue.HasValue then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenNull(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  LNew := AFunc(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullString.From(LNew);
+end;
+
+function MapNull(const AValue: INullString; AFunc: TPcStringFunc): INullString;
+var
+  LOld, LNew: string;
+begin
+  if not Assigned(AValue) or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenUndefined(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  LNew := AFunc(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullString.From(LNew);
+end;
+
+function MapOptNull(const AValue: IOptNullString; AFunc: TPcStringFunc): IOptNullString;
+var
+  LOld, LNew: string;
+begin
+  if not Assigned(AValue) or not AValue.HasValue or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  LOld := AValue.Value;
+  LNew := AFunc(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullString.From(LNew);
+end;
+
 { TOptionals }
+
+class function TOptionals.Trim(const AValue: IOptString): IOptString;
+begin
+  Result := MapOpt(AValue, NormTrim);
+end;
+
+class function TOptionals.Trim(const AValue: INullString): INullString;
+begin
+  Result := MapNull(AValue, NormTrim);
+end;
+
+class function TOptionals.Trim(const AValue: IOptNullString): IOptNullString;
+begin
+  Result := MapOptNull(AValue, NormTrim);
+end;
+
+class function TOptionals.Upper(const AValue: IOptString): IOptString;
+begin
+  Result := MapOpt(AValue, NormUpper);
+end;
+
+class function TOptionals.Upper(const AValue: INullString): INullString;
+begin
+  Result := MapNull(AValue, NormUpper);
+end;
+
+class function TOptionals.Upper(const AValue: IOptNullString): IOptNullString;
+begin
+  Result := MapOptNull(AValue, NormUpper);
+end;
+
+class function TOptionals.Lower(const AValue: IOptString): IOptString;
+begin
+  Result := MapOpt(AValue, NormLower);
+end;
+
+class function TOptionals.Lower(const AValue: INullString): INullString;
+begin
+  Result := MapNull(AValue, NormLower);
+end;
+
+class function TOptionals.Lower(const AValue: IOptNullString): IOptNullString;
+begin
+  Result := MapOptNull(AValue, NormLower);
+end;
+
+class function TOptionals.NullIfEmpty(const AValue: INullString): INullString;
+begin
+  Result := Safe(AValue);
+  if not Result.IsNull and not IsHiddenUndefined(Result) and (Result.Value = '') then
+    Result := TOptNullString.Null;
+end;
+
+class function TOptionals.NullIfEmpty(const AValue: IOptNullString): IOptNullString;
+begin
+  Result := Safe(AValue);
+  if Result.HasValue and not Result.IsNull and (Result.Value = '') then
+    Result := TOptNullString.Null;
+end;
+
+class function TOptionals.UndefinedIfEmpty(const AValue: IOptString): IOptString;
+begin
+  Result := Safe(AValue);
+  if Result.HasValue and not IsHiddenNull(Result) and (Result.Value = '') then
+    Result := TOptNullString.Undefined;
+end;
+
+class function TOptionals.UndefinedIfEmpty(const AValue: IOptNullString): IOptNullString;
+begin
+  Result := Safe(AValue);
+  if Result.HasValue and not Result.IsNull and (Result.Value = '') then
+    Result := TOptNullString.Undefined;
+end;
+
+class function TOptionals.Map(const AValue: IOptString; AFunc: TPcStringFunc): IOptString;
+begin
+  CheckFunc(AFunc);
+  Result := MapOpt(AValue, AFunc);
+end;
+
+class function TOptionals.Map(const AValue: INullString; AFunc: TPcStringFunc): INullString;
+begin
+  CheckFunc(AFunc);
+  Result := MapNull(AValue, AFunc);
+end;
+
+class function TOptionals.Map(const AValue: IOptNullString; AFunc: TPcStringFunc): IOptNullString;
+begin
+  CheckFunc(AFunc);
+  Result := MapOptNull(AValue, AFunc);
+end;
 
 class function TOptionals.Safe(const AValue: IOptString): IOptString;
 begin
