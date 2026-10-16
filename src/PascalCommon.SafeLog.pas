@@ -60,7 +60,39 @@ unit PascalCommon.SafeLog;
   System.SyncObjs) and no .inc, so it didn't build on FPC; its comments were in
   Portuguese and pointed to Common.FileLog for persistent logging, where
   PascalDb.SafeLog's pointed to the pool and migration event callbacks. Neither
-  flushed, so both had the problems above. }
+  flushed, so both had the problems above.
+
+  PcSetSafeLogUtf8(True) (1.10.0, off by default) makes SafeWriteln write
+  UTF-8 to a file or a pipe and UTF-16 to a Windows console, the same on both
+  compilers (docs/gotchas.md, gotcha 11). By default neither RTL writes UTF-8
+  on Windows: with stdout redirected, FPC writes in the console's code page
+  (GetConsoleOutputCP, 850 here: 'caf'#$82) and Delphi in the ANSI code page
+  (1252: 'caf'#$E9), and a character outside that code page becomes '?'. On a
+  console both use the console's code page, so a character outside it (the
+  euro sign under 850) becomes '?' too. Measured 2026-10-15 on FPC 3.2.2 and
+  Delphi 12, Win64. It is opt-in because it changes the bytes a consumer's
+  log already gets.
+
+  A file or a pipe: the line goes through Output with its code page set to
+  CP_UTF8 for that one Writeln and set back afterwards, inside the lock. So a
+  program that reassigned Output still gets the line where it pointed Output,
+  and Writeln calls outside SafeWriteln keep the old code page: a log fed by
+  both mixes the two encodings. Setting the code page once at startup
+  (SetTextCodePage(Output, CP_UTF8)) is not enough on FPC: Output is a
+  threadvar, and another thread's Output starts with the console's code page
+  again (measured: 'caf'#$C3#$A9 from the main thread, 'caf'#$82 from a
+  TThread, in one file). On Delphi, Output is opened on the first write and
+  keeps a code page set before that; when it was still 0 (not open yet), it
+  is set back to DefaultSystemCodePage, the one Delphi's TextOpen picks for a
+  file or a pipe, because 0 would make the next write reopen it.
+
+  A Windows console: WriteConsoleW with the text as UTF-16, after flushing
+  Output, so every character shows (measured by reading the screen back with
+  ReadConsoleOutputCharacterW). UTF-8 bytes there show mojibake under 850,
+  and SetConsoleOutputCP(CP_UTF8) changes the code page of the whole console,
+  the parent shell's included. If WriteConsoleW fails before writing
+  anything, the line goes the file-or-pipe way. Outside Windows only that way
+  exists; it gives UTF-8 whatever the locale says. }
 
 interface
 
@@ -72,14 +104,132 @@ procedure SafeWriteln(const AText: string); overload;
 /// returns before formatting.
 procedure SafeWriteln(const AFormatStr: string; const AArgs: array of const); overload;
 
+/// Turns UTF-8 output on or off for SafeWriteln (off by default): UTF-8 to a
+/// file or a pipe, UTF-16 through WriteConsoleW to a Windows console (see the
+/// unit header). Call it once at startup; it holds for every thread. Writeln
+/// calls outside SafeWriteln are not affected.
+procedure PcSetSafeLogUtf8(AEnabled: Boolean);
+/// Whether SafeWriteln writes UTF-8 (PcSetSafeLogUtf8).
+function PcSafeLogUtf8: Boolean;
+
 implementation
 
 uses
+  {$IFDEF PASCALCOMMON_WINDOWS}
+  {$IFDEF FPC}
+  Windows,
+  {$ELSE}
+  Winapi.Windows,
+  {$ENDIF}
+  {$ENDIF}
   SysUtils,
   SyncObjs;
 
+{$IFDEF PASCALCOMMON_WINDOWS}
+const
+  // characters per WriteConsoleW call: older consoles reject one call much
+  // larger than 64 KB
+  CONSOLE_CHUNK = 8192;
+{$ENDIF}
+
 var
   GConsoleLock: TCriticalSection;
+  // read and written only under GConsoleLock
+  GUtf8: Boolean;
+
+{$IFDEF PASCALCOMMON_WINDOWS}
+// The console handle Output writes to, or 0 when Output goes to a file, a
+// pipe, a device of the program's own, or nowhere (no console attached).
+function OutputConsoleHandle: THandle;
+var
+  LHandle: THandle;
+  LMode: DWORD;
+begin
+  Result := 0;
+  if TTextRec(Output).Mode = fmOutput then
+    LHandle := THandle(TTextRec(Output).Handle)
+  else if (TTextRec(Output).Mode = fmClosed) and (TTextRec(Output).Name[0] = #0) then
+    // Delphi opens the standard Output on its first write
+    LHandle := GetStdHandle(STD_OUTPUT_HANDLE)
+  else
+    Exit;
+  if GetConsoleMode(LHandle, LMode) then
+    Result := LHandle;
+end;
+
+// Writes AText and a line break to the console as UTF-16. False only when
+// nothing was written, so the caller can still write the line another way.
+function WriteConsoleLine(AHandle: THandle; const AText: string): Boolean;
+var
+  LText: UnicodeString;
+  P: PWideChar;
+  LLeft, LChunk: Integer;
+  LWritten: DWORD;
+begin
+  LText := UnicodeString(AText) + sLineBreak;
+  P := PWideChar(LText);
+  LLeft := Length(LText);
+  while LLeft > 0 do
+  begin
+    LChunk := LLeft;
+    if LChunk > CONSOLE_CHUNK then
+    begin
+      LChunk := CONSOLE_CHUNK;
+      // don't split a surrogate pair between two calls
+      if (P[LChunk - 1] >= #$D800) and (P[LChunk - 1] <= #$DBFF) then
+        Dec(LChunk);
+    end;
+    LWritten := 0;
+    if not WriteConsoleW(AHandle, P, LChunk, LWritten, nil) or (LWritten = 0) then
+      Break;
+    Inc(P, LWritten);
+    Dec(LLeft, LWritten);
+  end;
+  Result := LLeft < Length(LText);
+end;
+{$ENDIF}
+
+// Writeln(AText) through Output with its code page set to CP_UTF8 for this
+// one line, then flushed (unit header).
+procedure WritelnUtf8ToText(const AText: string);
+var
+  LOldCodePage: Word;
+begin
+  LOldCodePage := TTextRec(Output).CodePage;
+  TTextRec(Output).CodePage := CP_UTF8;
+  try
+    Writeln(AText);
+    Flush(Output);
+  finally
+    {$IFNDEF FPC}
+    // 0: Delphi hadn't opened Output yet; give it the code page its TextOpen
+    // picks for a file or a pipe, since 0 would make the next write reopen it
+    if LOldCodePage = 0 then
+      LOldCodePage := DefaultSystemCodePage;
+    {$ENDIF}
+    TTextRec(Output).CodePage := LOldCodePage;
+  end;
+end;
+
+procedure WritelnUtf8(const AText: string);
+{$IFDEF PASCALCOMMON_WINDOWS}
+var
+  LConsole: THandle;
+{$ENDIF}
+begin
+  {$IFDEF PASCALCOMMON_WINDOWS}
+  LConsole := OutputConsoleHandle;
+  if LConsole <> 0 then
+  begin
+    // whatever an earlier Write left in the buffer goes out first
+    if TTextRec(Output).Mode = fmOutput then
+      Flush(Output);
+    if WriteConsoleLine(LConsole, AText) then
+      Exit;
+  end;
+  {$ENDIF}
+  WritelnUtf8ToText(AText);
+end;
 
 procedure SafeWriteln(const AText: string);
 begin
@@ -89,11 +239,16 @@ begin
 
   GConsoleLock.Enter;
   try
-    Writeln(AText);
-    // a file or a pipe isn't flushed by Writeln on either compiler, and
-    // Output is per thread on FPC: send the buffer out while the lock is held
-    // (unit header)
-    Flush(Output);
+    if GUtf8 then
+      WritelnUtf8(AText)
+    else
+    begin
+      Writeln(AText);
+      // a file or a pipe isn't flushed by Writeln on either compiler, and
+      // Output is per thread on FPC: send the buffer out while the lock is
+      // held (unit header)
+      Flush(Output);
+    end;
   finally
     GConsoleLock.Leave;
   end;
@@ -106,6 +261,26 @@ begin
     Exit;
 
   SafeWriteln(Format(AFormatStr, AArgs));
+end;
+
+procedure PcSetSafeLogUtf8(AEnabled: Boolean);
+begin
+  GConsoleLock.Enter;
+  try
+    GUtf8 := AEnabled;
+  finally
+    GConsoleLock.Leave;
+  end;
+end;
+
+function PcSafeLogUtf8: Boolean;
+begin
+  GConsoleLock.Enter;
+  try
+    Result := GUtf8;
+  finally
+    GConsoleLock.Leave;
+  end;
 end;
 
 initialization

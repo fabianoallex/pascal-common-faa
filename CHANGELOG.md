@@ -6,6 +6,30 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-15
+
+### Added
+
+- `PcSetSafeLogUtf8(AEnabled)` and `PcSafeLogUtf8` (`PascalCommon.SafeLog`). When it's on,
+  `SafeWriteln` writes UTF-8 to a file or a pipe, and UTF-16 through `WriteConsoleW` to a
+  Windows console. It holds for every thread. It's off by default, because turning it on
+  changes the bytes a consumer's log already gets.
+  Found by pascal-api-infra-faa (samples/04-messaging): on FPC/Windows, the consumer's log
+  showed "café" with byte 0x82, the é of code page 850. Measured on FPC 3.2.2 and Delphi 12,
+  with the same results for `SafeWriteln` and plain `Writeln` (new gotcha 11):
+  - **Redirected to a file or a pipe:** neither compiler writes UTF-8. FPC writes in the
+    console's code page (850), Delphi in the ANSI code page (1252), and a character outside
+    that code page becomes `?`.
+  - **On a console:** both use the console's code page, so the euro sign becomes `?` under 850.
+  - **Why the program can't fix it at startup on FPC:** `SetTextCodePage(Output, CP_UTF8)`
+    doesn't reach other threads, because `Output` is a threadvar there.
+  - **How it works.** For a file or a pipe, the code page of `Output` is set to `CP_UTF8` for
+    that one line and set back afterwards, inside the lock. A `Writeln` outside `SafeWriteln`
+    keeps the old code page, so a log fed by both mixes two encodings. For a console,
+    `WriteConsoleW` is used instead of `SetConsoleOutputCP`, which would change the code page
+    of the whole console, the parent shell's included. Outside Windows, the output is UTF-8
+    whatever the locale.
+
 ## [1.9.0] - 2026-10-15
 
 ### Added

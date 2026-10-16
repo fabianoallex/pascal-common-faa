@@ -192,3 +192,40 @@ about 240 KB in a Linux binary without smart linking (whether or not the functio
 about 90 KB with `-XX -CX`. `PascalCommon.Optionals` does this since 1.9.0 (`{$IFDEF FPC}`; Delphi
 keeps `AnsiUpperCase`/`AnsiLowerCase`). Its test runs `'são paulo'` on every platform, and the
 Linux CI container has no `LANG`, so a return to the locale-dependent call fails there.
+
+
+## 11. Windows: a redirected stdout isn't UTF-8, and setting it at startup doesn't reach other threads on FPC
+
+**Symptom.** A console program writes a UTF-8 string with `Writeln` (or `SafeWriteln`), its
+stdout goes to a file or a pipe, and the accented letters come out wrong even though the string
+is right. Seen from pascal-api-infra-faa (samples/04-messaging, the consumer's log, FPC 3.2.2):
+"café" was written with byte 0x82, the é of code page 850. Measured 2026-10-15 on Windows 11
+(console code page 850, ANSI code page 1252), for `café ç ã €`:
+
+| Output | FPC 3.2.2 | Delphi 12 |
+|---|---|---|
+| File or pipe, process with a console | `63 61 66 82 …` (850), € → `?` | `63 61 66 e9 …` (1252) |
+| File or pipe, no console attached (a service) | 1252, or UTF-8 after `SetMultiByteConversionCodePage(CP_UTF8)` | 1252 |
+| Console | right for what 850 has, € → `?` | the same |
+
+**Cause.** Both RTLs convert the string to the code page of the `Output` text record, chosen
+when it's opened. FPC uses `GetConsoleOutputCP` for every standard handle, a console or not
+(`rtl/inc/text.inc`, `OpenStdIO`). With no console attached, that function returns 0, which
+stands for `DefaultSystemCodePage`. Delphi uses `GetConsoleOutputCP` for a console and
+`DefaultSystemCodePage` for anything else (`TextOpen` in `System.pas`). Neither picks UTF-8.
+`SetMultiByteConversionCodePage(CP_UTF8)` changes the strings' code page, not `Output`'s.
+`SetTextCodePage(Output, CP_UTF8)` at startup fixes a file on Delphi, but on FPC `Output` is a
+threadvar (gotcha 8): it fixes only the calling thread's. Measured in one file: `caf c3 a9`
+from the main thread, `caf 82` from a `TThread`. On a console, UTF-8 bytes show mojibake under
+850. `SetConsoleOutputCP(CP_UTF8)` makes them show right, but it changes the code page of the
+whole console, the shell that started the program included.
+
+**Fix.** Call `PcSetSafeLogUtf8(True)` at startup and write through `SafeWriteln` (since
+1.10.0). For a file or a pipe, `SafeWriteln` sets `Output`'s code page to `CP_UTF8` for each
+line and sets it back, inside its lock, on the calling thread's `Output`. For a console, it
+writes UTF-16 with `WriteConsoleW` and leaves the console's code page alone. Measured with the
+option on (FPC): UTF-8 from the main thread and from a `TThread`, to a file, a pipe and with no
+console attached. On a console, reading the screen back gave `café €`. The classic console
+shows an emoji as U+FFFD, a limit of its screen buffer. A plain `Writeln` in the same program
+keeps the old code page. `PascalCommon.SafeLogTests` sets the captured or file `Output` to 1252
+and checks the bytes, so it fails if the option has no effect.

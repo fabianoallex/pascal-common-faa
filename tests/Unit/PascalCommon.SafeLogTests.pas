@@ -31,6 +31,16 @@ unit PascalCommon.SafeLogTests;
   IsConsole is set explicitly in every test and restored: the FPC GUI runner on
   Windows runs without a console.
 
+  The UTF-8 tests (PcSetSafeLogUtf8, 1.10.0) set the code page of the
+  captured or file Output to 1252 before writing, so the bytes would come out
+  in 1252 if SafeWriteln didn't switch it, and compare bytes, not strings.
+  The text is built from UTF-8 bytes, not from a literal: this file has no
+  BOM, and Delphi would read a non-ASCII literal in it as ANSI. It holds a
+  character outside 1252 and one outside the BMP (a surrogate pair on
+  Delphi). The console path (WriteConsoleW) has no test here: the tests'
+  Output is never a console. It was measured by reading a console's screen
+  back (unit header of PascalCommon.SafeLog).
+
   The concurrent test checks what can be checked from inside the process: every
   line arrives whole, none is lost, and each writer's lines arrive in the order
   it wrote them. It doesn't check that two libraries share the lock; that holds
@@ -60,6 +70,11 @@ type
     [Test] procedure NoConsole_FormatOverloadDoesntFormat;
     [Test] procedure FileOutput_EachLineReachesTheFileBeforeTheNextWrite;
     [Test] procedure ConcurrentWriters_EveryLineWholeAndInOrder;
+    [Test] procedure Utf8_IsOffByDefault;
+    [Test] procedure Utf8Off_WritesInTheOutputCodePage;
+    [Test] procedure Utf8_WritesUtf8AndKeepsTheOutputCodePage;
+    [Test] procedure Utf8_FileOutput_WritesUtf8;
+    [Test] procedure Utf8_ConcurrentWriters_EveryLineWholeAndInOrder;
   end;
 
 implementation
@@ -76,6 +91,14 @@ const
   // buffer often fills in the middle of a line
   LINE_WIDTH = 300;
   START_TIMEOUT_MS = 10000;
+  // a code page that isn't UTF-8: it has the a with tilde (#$E3) and the euro
+  // sign (#$80), not the CJK character nor the emoji of the sample
+  CP_LATIN = 1252;
+  // "Sao Paulo" with an a-tilde, the euro sign, U+65E5 (CJK) and U+1F600 (an
+  // emoji, a surrogate pair in UTF-16), in UTF-8
+  SAMPLE_UTF8: array[0..22] of Byte = (
+    $53, $C3, $A3, $6F, $20, $50, $61, $75, $6C, $6F, $20, $E2, $82, $AC,
+    $20, $E6, $97, $A5, $20, $F0, $9F, $98, $80);
 
 var
   GCaptureLock: TCriticalSection;
@@ -172,6 +195,55 @@ begin
   Result := string(LBytes);
 end;
 
+function BytesToHex(const ABytes: RawByteString): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 1 to Length(ABytes) do
+    Result := Result + IntToHex(Ord(ABytes[I]), 2);
+end;
+
+// Closes the capture like EndCapture and returns what was written as hex.
+function EndCaptureHex: string;
+var
+  LBytes: RawByteString;
+begin
+  CloseFile(Output);
+  Move(GSavedOutput, Output, SizeOf(TTextRec));
+  SetString(LBytes, PAnsiChar(GCaptured.Memory), GCaptured.Size);
+  Result := BytesToHex(LBytes);
+end;
+
+function SampleUtf8: RawByteString;
+begin
+  SetLength(Result, Length(SAMPLE_UTF8));
+  Move(SAMPLE_UTF8[0], Result[1], Length(SAMPLE_UTF8));
+end;
+
+// UTF-8 bytes as a string: UTF-16 on Delphi, the process code page on FPC
+// (UTF-8 in the test runner).
+function Utf8BytesToText(const ABytes: RawByteString): string;
+var
+  LUtf8: UTF8String;
+begin
+  SetLength(LUtf8, Length(ABytes));
+  if ABytes <> '' then
+    Move(ABytes[1], LUtf8[1], Length(ABytes));
+  SetCodePage(RawByteString(LUtf8), CP_UTF8, False);
+  Result := string(LUtf8);
+end;
+
+function SampleText: string;
+begin
+  Result := Utf8BytesToText(SampleUtf8);
+end;
+
+function LineBreakHex: string;
+begin
+  Result := BytesToHex(RawByteString(sLineBreak));
+end;
+
 function TempFilePath: string;
 var
   LGuid: TGUID;
@@ -187,6 +259,20 @@ end;
 
 // Reads the whole file through a handle of its own, while another may still
 // be writing it.
+function ReadWholeFileBytes(const APath: string): RawByteString;
+var
+  LStream: TFileStream;
+begin
+  LStream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Result, LStream.Size);
+    if LStream.Size > 0 then
+      LStream.ReadBuffer(Result[1], LStream.Size);
+  finally
+    LStream.Free;
+  end;
+end;
+
 function ReadWholeFile(const APath: string): string;
 var
   LStream: TFileStream;
@@ -396,7 +482,9 @@ begin
     LAfterLong);
 end;
 
-procedure TSafeLogTests.ConcurrentWriters_EveryLineWholeAndInOrder;
+// Runs NUM_WRITERS writer threads into the capture and returns '' or what
+// went wrong.
+function RunConcurrentWriters: string;
 var
   LOldIsConsole: Boolean;
   LStart: TEvent;
@@ -404,6 +492,7 @@ var
   LErrors, LText: string;
   I: Integer;
 begin
+  Result := '';
   LErrors := '';
   LOldIsConsole := IsConsole;
   IsConsole := True;
@@ -428,8 +517,111 @@ begin
     IsConsole := LOldIsConsole;
     LStart.Free;
   end;
-  TAssert.AssertEquals('', LErrors);
-  TAssert.AssertEquals('', CheckWriterLines(LText));
+  if LErrors <> '' then
+    Result := LErrors
+  else
+    Result := CheckWriterLines(LText);
+end;
+
+procedure TSafeLogTests.ConcurrentWriters_EveryLineWholeAndInOrder;
+begin
+  TAssert.AssertEquals('', RunConcurrentWriters);
+end;
+
+procedure TSafeLogTests.Utf8_IsOffByDefault;
+begin
+  // every test that turns it on turns it off again in a finally
+  TAssert.AssertFalse(PcSafeLogUtf8);
+end;
+
+procedure TSafeLogTests.Utf8Off_WritesInTheOutputCodePage;
+var
+  LOldIsConsole: Boolean;
+  LHex: string;
+begin
+  LOldIsConsole := IsConsole;
+  IsConsole := True;
+  BeginCapture;
+  try
+    TTextRec(Output).CodePage := CP_LATIN;
+    SafeWriteln(Utf8BytesToText(Copy(SampleUtf8, 1, 3)));
+  finally
+    LHex := EndCaptureHex;
+    IsConsole := LOldIsConsole;
+  end;
+  // without the option, S and a-tilde come out in 1252: the setup of the
+  // UTF-8 tests would catch a SafeWriteln that ignores the option
+  TAssert.AssertEquals('53E3' + LineBreakHex, LHex);
+end;
+
+procedure TSafeLogTests.Utf8_WritesUtf8AndKeepsTheOutputCodePage;
+var
+  LOldIsConsole: Boolean;
+  LCodePageAfter: Word;
+  LHex: string;
+begin
+  LOldIsConsole := IsConsole;
+  IsConsole := True;
+  BeginCapture;
+  PcSetSafeLogUtf8(True);
+  try
+    TTextRec(Output).CodePage := CP_LATIN;
+    SafeWriteln(SampleText);
+    SafeWriteln('%s!', [SampleText]);
+    LCodePageAfter := TTextRec(Output).CodePage;
+  finally
+    PcSetSafeLogUtf8(False);
+    LHex := EndCaptureHex;
+    IsConsole := LOldIsConsole;
+  end;
+  TAssert.AssertEquals(BytesToHex(SampleUtf8) + LineBreakHex +
+    BytesToHex(SampleUtf8) + '21' + LineBreakHex, LHex);
+  TAssert.AssertEquals('Output code page set back', CP_LATIN, Integer(LCodePageAfter));
+end;
+
+procedure TSafeLogTests.Utf8_FileOutput_WritesUtf8;
+var
+  LOldIsConsole: Boolean;
+  LSaved: TTextRec;
+  LPath, LAfterFirst, LAfterSecond: string;
+begin
+  LPath := TempFilePath;
+  LOldIsConsole := IsConsole;
+  IsConsole := True;
+  Move(Output, LSaved, SizeOf(TTextRec));
+  AssignFile(Output, LPath);
+  Rewrite(Output);
+  PcSetSafeLogUtf8(True);
+  try
+    TTextRec(Output).CodePage := CP_LATIN;
+    SafeWriteln(SampleText);
+    LAfterFirst := BytesToHex(ReadWholeFileBytes(LPath));
+    SafeWriteln('plain');
+    LAfterSecond := BytesToHex(ReadWholeFileBytes(LPath));
+  finally
+    PcSetSafeLogUtf8(False);
+    CloseFile(Output);
+    Move(LSaved, Output, SizeOf(TTextRec));
+    IsConsole := LOldIsConsole;
+    DeleteFile(LPath);
+  end;
+  TAssert.AssertEquals('after the first line', BytesToHex(SampleUtf8) + LineBreakHex,
+    LAfterFirst);
+  TAssert.AssertEquals('after the second line', BytesToHex(SampleUtf8) + LineBreakHex +
+    BytesToHex(RawByteString('plain')) + LineBreakHex, LAfterSecond);
+end;
+
+procedure TSafeLogTests.Utf8_ConcurrentWriters_EveryLineWholeAndInOrder;
+var
+  LResult: string;
+begin
+  PcSetSafeLogUtf8(True);
+  try
+    LResult := RunConcurrentWriters;
+  finally
+    PcSetSafeLogUtf8(False);
+  end;
+  TAssert.AssertEquals('', LResult);
 end;
 
 initialization
