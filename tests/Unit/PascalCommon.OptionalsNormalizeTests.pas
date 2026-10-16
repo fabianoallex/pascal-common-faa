@@ -13,6 +13,13 @@
   the hidden states, the same instance for an unchanged value, and
   TOptionals.Safe(X) as the start of a chain when X is nil.
 
+  The Normalizer_* tests cover Normalize (1.12.0), Map with an
+  IPcStringNormalizer: the same rules, Apply never called without a value,
+  one instance reused for many values, and an object created in the call
+  (Normalize(TX.Create(...))) freed once the call returns. That last one runs the call in a separate
+  function, because Delphi keeps an expression's temporaries until the
+  routine ends.
+
   Each result is reduced to a text (Describe*: 'nil', 'undefined', 'null' or
   'value:<text>'), so a failure shows the state it got. Upper/Lower are
   checked with 'são paulo' on every platform: they must not depend on the
@@ -104,6 +111,24 @@ type
     procedure Fluent_SafeOfNil_StartsAChain;
     [Test]
     procedure Fluent_MapNilFunction_RaisesEArgumentException;
+    [Test]
+    procedure Normalizer_Opt_KeepsStateAndApplies;
+    [Test]
+    procedure Normalizer_Null_KeepsStateAndApplies;
+    [Test]
+    procedure Normalizer_OptNull_KeepsStateAndApplies;
+    [Test]
+    procedure Normalizer_NotCalledWithoutValue;
+    [Test]
+    procedure Normalizer_ReusedForManyValues;
+    [Test]
+    procedure Normalizer_CreatedInTheCall_IsFreed;
+    [Test]
+    procedure Normalizer_ChainsWithFunctionsAndBuiltins;
+    [Test]
+    procedure Normalizer_UnchangedValue_ReturnsSameInstance;
+    [Test]
+    procedure Normalizer_Nil_RaisesEArgumentException;
   end;
 
 implementation
@@ -217,6 +242,66 @@ begin
   for I := 1 to Length(AValue) do
     if (AValue[I] >= '0') and (AValue[I] <= '9') then
       Result := Result + AValue[I];
+end;
+
+{ Normalizers for Normalize: classes, because they carry parameters. TCounting
+  counts its Apply calls and reports its destruction through pointers, so a
+  test can check both after the object is gone. }
+
+type
+  TMaxLength = class(TInterfacedObject, IPcStringNormalizer)
+  private
+    FMax: Integer;
+  public
+    constructor Create(AMax: Integer);
+    function Apply(const AValue: string): string;
+  end;
+
+  TCounting = class(TInterfacedObject, IPcStringNormalizer)
+  private
+    FCalls: PInteger;
+    FFreed: PBoolean;
+  public
+    constructor Create(ACalls: PInteger; AFreed: PBoolean);
+    destructor Destroy; override;
+    function Apply(const AValue: string): string;
+  end;
+
+constructor TMaxLength.Create(AMax: Integer);
+begin
+  inherited Create;
+  FMax := AMax;
+end;
+
+function TMaxLength.Apply(const AValue: string): string;
+begin
+  Result := Copy(AValue, 1, FMax);
+end;
+
+constructor TCounting.Create(ACalls: PInteger; AFreed: PBoolean);
+begin
+  inherited Create;
+  FCalls := ACalls;
+  FFreed := AFreed;
+end;
+
+destructor TCounting.Destroy;
+begin
+  if FFreed <> nil then
+    FFreed^ := True;
+  inherited Destroy;
+end;
+
+function TCounting.Apply(const AValue: string): string;
+begin
+  Inc(FCalls^);
+  Result := '<' + AValue + '>';
+end;
+
+function MapWithNewCounting(const AValue: IOptString; ACalls: PInteger;
+  AFreed: PBoolean): string;
+begin
+  Result := DescribeOpt(AValue.Normalize(TCounting.Create(ACalls, AFreed)));
 end;
 
 { TOptionalNormalizeTests }
@@ -549,6 +634,117 @@ begin
       LRaised := True;
   end;
   TAssert.AssertTrue('even with no value to transform', LRaised);
+end;
+
+procedure TOptionalNormalizeTests.Normalizer_Opt_KeepsStateAndApplies;
+begin
+  TAssert.AssertEquals('nil', 'undefined', DescribeOpt(TOptionals.Normalize(IOptString(nil), TMaxLength.Create(2))));
+  TAssert.AssertEquals('undefined', 'undefined', DescribeOpt(OptUndefined.Normalize(TMaxLength.Create(2))));
+  TAssert.AssertEquals('hidden null', 'null', DescribeOpt(OptHiddenNull.Normalize(TMaxLength.Create(2))));
+  TAssert.AssertEquals('value', 'value:ab', DescribeOpt(OptOf('abcd').Normalize(TMaxLength.Create(2))));
+  TAssert.AssertEquals('static', 'value:ab', DescribeOpt(TOptionals.Normalize(OptOf('abcd'), TMaxLength.Create(2))));
+end;
+
+procedure TOptionalNormalizeTests.Normalizer_Null_KeepsStateAndApplies;
+begin
+  TAssert.AssertEquals('nil', 'null', DescribeNull(TOptionals.Normalize(INullString(nil), TMaxLength.Create(2))));
+  TAssert.AssertEquals('null', 'null', DescribeNull(NullNull.Normalize(TMaxLength.Create(2))));
+  TAssert.AssertEquals('hidden undefined', 'undefined', DescribeNull(NullHiddenUndefined.Normalize(TMaxLength.Create(2))));
+  TAssert.AssertEquals('value', 'value:ab', DescribeNull(NullOf('abcd').Normalize(TMaxLength.Create(2))));
+  TAssert.AssertEquals('static', 'value:ab', DescribeNull(TOptionals.Normalize(NullOf('abcd'), TMaxLength.Create(2))));
+end;
+
+procedure TOptionalNormalizeTests.Normalizer_OptNull_KeepsStateAndApplies;
+begin
+  TAssert.AssertEquals('nil', 'undefined', DescribeOptNull(TOptionals.Normalize(IOptNullString(nil), TMaxLength.Create(2))));
+  TAssert.AssertEquals('undefined', 'undefined', DescribeOptNull(OptNullUndefined.Normalize(TMaxLength.Create(2))));
+  TAssert.AssertEquals('null', 'null', DescribeOptNull(OptNullNull.Normalize(TMaxLength.Create(2))));
+  TAssert.AssertEquals('value', 'value:ab', DescribeOptNull(OptNullOf('abcd').Normalize(TMaxLength.Create(2))));
+  TAssert.AssertEquals('static', 'value:ab', DescribeOptNull(TOptionals.Normalize(OptNullOf('abcd'), TMaxLength.Create(2))));
+end;
+
+procedure TOptionalNormalizeTests.Normalizer_NotCalledWithoutValue;
+var
+  LCalls: Integer;
+  LNormalizer: IPcStringNormalizer;
+begin
+  LCalls := 0;
+  LNormalizer := TCounting.Create(@LCalls, nil);
+  OptUndefined.Normalize(LNormalizer);
+  OptHiddenNull.Normalize(LNormalizer);
+  NullNull.Normalize(LNormalizer);
+  NullHiddenUndefined.Normalize(LNormalizer);
+  OptNullUndefined.Normalize(LNormalizer);
+  OptNullNull.Normalize(LNormalizer);
+  TAssert.AssertEquals('no value, no call', 0, LCalls);
+  OptOf('a').Normalize(LNormalizer);
+  TAssert.AssertEquals('one value, one call', 1, LCalls);
+end;
+
+procedure TOptionalNormalizeTests.Normalizer_ReusedForManyValues;
+var
+  LCalls: Integer;
+  LNormalizer: IPcStringNormalizer;
+begin
+  LCalls := 0;
+  LNormalizer := TCounting.Create(@LCalls, nil);
+  TAssert.AssertEquals('opt', 'value:<a>', DescribeOpt(OptOf('a').Normalize(LNormalizer)));
+  TAssert.AssertEquals('null', 'value:<b>', DescribeNull(NullOf('b').Normalize(LNormalizer)));
+  TAssert.AssertEquals('optnull', 'value:<c>', DescribeOptNull(TOptionals.Normalize(OptNullOf('c'), LNormalizer)));
+  TAssert.AssertEquals('calls', 3, LCalls);
+end;
+
+procedure TOptionalNormalizeTests.Normalizer_CreatedInTheCall_IsFreed;
+var
+  LCalls: Integer;
+  LFreed: Boolean;
+begin
+  LCalls := 0;
+  LFreed := False;
+  TAssert.AssertEquals('result', 'value:<a>', MapWithNewCounting(OptOf('a'), @LCalls, @LFreed));
+  TAssert.AssertEquals('calls', 1, LCalls);
+  TAssert.AssertTrue('freed after the call', LFreed);
+end;
+
+procedure TOptionalNormalizeTests.Normalizer_ChainsWithFunctionsAndBuiltins;
+var
+  LZip: IOptNullString;
+begin
+  LZip := OptNullOf(' 89.010-000 ');
+  LZip := LZip.Trim.Map(OnlyDigits).Normalize(TMaxLength.Create(5));
+  TAssert.AssertEquals('value', 'value:89010', DescribeOptNull(LZip));
+  TAssert.AssertEquals('blank', 'null',
+    DescribeOptNull(OptNullOf(' -.- ').Map(OnlyDigits).Normalize(TMaxLength.Create(5)).NullIfEmpty));
+end;
+
+procedure TOptionalNormalizeTests.Normalizer_UnchangedValue_ReturnsSameInstance;
+var
+  LOpt: IOptString;
+begin
+  LOpt := OptOf('ab');
+  TAssert.AssertTrue(LOpt.Normalize(TMaxLength.Create(5)) = LOpt);
+end;
+
+procedure TOptionalNormalizeTests.Normalizer_Nil_RaisesEArgumentException;
+var
+  LFluent, LStatic: Boolean;
+begin
+  LFluent := False;
+  try
+    OptUndefined.Normalize(IPcStringNormalizer(nil));
+  except
+    on E: EArgumentException do
+      LFluent := True;
+  end;
+  LStatic := False;
+  try
+    TOptionals.Normalize(NullNull, IPcStringNormalizer(nil));
+  except
+    on E: EArgumentException do
+      LStatic := True;
+  end;
+  TAssert.AssertTrue('fluent, even with no value to transform', LFluent);
+  TAssert.AssertTrue('static, even with no value to transform', LStatic);
 end;
 
 initialization

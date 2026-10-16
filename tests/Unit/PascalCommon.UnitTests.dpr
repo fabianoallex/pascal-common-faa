@@ -36,6 +36,7 @@ uses
   PascalCommon.ClockCacheTests in 'PascalCommon.ClockCacheTests.pas',
   PascalCommon.OptionalsTests in 'PascalCommon.OptionalsTests.pas',
   PascalCommon.OptionalsNormalizeTests in 'PascalCommon.OptionalsNormalizeTests.pas',
+  PascalCommon.OptionalsMapTests in 'PascalCommon.OptionalsMapTests.pas',
   PascalCommon.ThreadPoolTests in 'PascalCommon.ThreadPoolTests.pas',
   PascalCommon.SafeLogTests in 'PascalCommon.SafeLogTests.pas',
   PascalCommon.Utf8Tests in 'PascalCommon.Utf8Tests.pas',

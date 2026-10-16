@@ -30,6 +30,7 @@ uses
   PascalCommon.ClockCacheTests,
   PascalCommon.OptionalsTests,
   PascalCommon.OptionalsNormalizeTests,
+  PascalCommon.OptionalsMapTests,
   PascalCommon.ThreadPoolTests,
   PascalCommon.SafeLogTests,
   PascalCommon.Utf8Tests,

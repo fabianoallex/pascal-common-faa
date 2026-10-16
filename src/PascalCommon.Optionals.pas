@@ -21,9 +21,10 @@
   TOptionals.Trim/Upper/Lower/NullIfEmpty/UndefinedIfEmpty/Map (1.9.0)
   normalize a string optional without opening it with an if: the result keeps
   the state (Undefined, Null or a value) and only a present value changes, so
-  it can go straight to a parameter, a message or a comparison. Only string
-  has them: it is the measured case (a PATCH DTO in pascal-api-infra-faa);
-  the other types get theirs when a consumer needs them, as additions. Map
+  it can go straight to a parameter, a message or a comparison. The named
+  ones (Trim, Upper...) exist only for string: it is the measured case (a
+  PATCH DTO in pascal-api-infra-faa). Map and Normalize exist for every type
+  since 1.12.0, so a caller writes its own for the rest. Map
   takes a plain function pointer (TPcStringFunc) because FPC 3.2.2 has no
   closures, and "of object" there would make a Delphi caller's plain function
   fail to build on FPC; SysUtils.Trim is overloaded, which is one reason the
@@ -36,6 +37,22 @@
   three flavors, whose methods share names but not result types, so it maps
   each one with a method resolution clause (function IOptString.Trim =
   OptTrim), which Delphi and FPC in mode Delphi both accept.
+
+  Normalize (1.12.0) is Map with an IPcStringNormalizer: an object with an
+  Apply method, for a transformation with parameters (a maximum length, a
+  pad character) that a plain function can't carry without closures. It has
+  its own name instead of being a Map overload because Delphi doesn't accept
+  a method resolution clause for an overloaded interface method (E2291: it
+  binds one overload and reports the other as missing; FPC accepts it), and
+  because an overload would make a literal nil passed to Map ambiguous.
+
+  Map and Normalize exist for every type (1.12.0), each with its own
+  function type and normalizer interface (TPcIntegerFunc,
+  IPcIntegerNormalizer...), since a single generic one would need generic
+  methods on an interface, which neither compiler allows. Single and Double
+  pass the source's DecimalPlaces to From, so the result keeps them, except
+  for a result of 0: From returns its shared zero, whose DecimalPlaces is -1.
+  TGUID is compared with IsEqualGUID.
 
   Dual-compiler: the cache-key comparers for Single/Double are named
   functions (TEqualityComparer<T>.Construct doesn't accept a closure on FPC
@@ -56,6 +73,81 @@ type
   /// passes to a "reference to", so code written on one compiler wouldn't
   /// build on the other.
   TPcStringFunc = function(const AValue: string): string;
+
+  /// A string transformation that carries its own parameters or state, for
+  /// Normalize (1.12.0): TMaxLength.Create(50), TPadLeft.Create(8, '0'). An
+  /// interface instead of a closure because FPC 3.2.2 has none; the
+  /// reference count frees the object, so X.Normalize(TMaxLength.Create(50))
+  /// needs no try/finally. Apply is called only for a present value. One
+  /// instance may be kept and used for many values, from many threads if
+  /// Apply doesn't change the object. The Normalize parameters that take it
+  /// are not const on purpose: a newly created object passed to a const
+  /// interface parameter gets no reference and is never freed, and
+  /// Normalize(TX.Create(...)) is the intended use.
+  IPcStringNormalizer = interface
+    ['{72A22294-26D8-4400-B228-9AF19707FCBE}']
+    function Apply(const AValue: string): string;
+  end;
+
+  // Map and Normalize for the other types (1.12.0): the same rules as the
+  // string ones. Single and Double keep the source's DecimalPlaces (but a
+  // result of 0 is From's shared zero, DecimalPlaces -1).
+
+  TPcIntegerFunc = function(const AValue: Integer): Integer;
+
+  IPcIntegerNormalizer = interface
+    ['{D57FC7DF-917C-40E5-ADA3-C5182DCA2701}']
+    function Apply(const AValue: Integer): Integer;
+  end;
+
+  TPcInt64Func = function(const AValue: Int64): Int64;
+
+  IPcInt64Normalizer = interface
+    ['{D24895B5-EDB1-44BA-8B05-FFF941E32EC6}']
+    function Apply(const AValue: Int64): Int64;
+  end;
+
+  TPcSingleFunc = function(const AValue: Single): Single;
+
+  IPcSingleNormalizer = interface
+    ['{E197E442-8EF8-40A5-B856-6FBC2E9EB284}']
+    function Apply(const AValue: Single): Single;
+  end;
+
+  TPcDoubleFunc = function(const AValue: Double): Double;
+
+  IPcDoubleNormalizer = interface
+    ['{DECD0C0B-28E2-4634-AA6C-1DA28A08C49C}']
+    function Apply(const AValue: Double): Double;
+  end;
+
+  TPcCurrencyFunc = function(const AValue: Currency): Currency;
+
+  IPcCurrencyNormalizer = interface
+    ['{EDBA68F0-11DF-4B12-A60E-F6E668AE7DB9}']
+    function Apply(const AValue: Currency): Currency;
+  end;
+
+  TPcDateTimeFunc = function(const AValue: TDateTime): TDateTime;
+
+  IPcDateTimeNormalizer = interface
+    ['{39E60801-94FD-4F3B-BA22-47BB551646DA}']
+    function Apply(const AValue: TDateTime): TDateTime;
+  end;
+
+  TPcBooleanFunc = function(const AValue: Boolean): Boolean;
+
+  IPcBooleanNormalizer = interface
+    ['{45504AF1-53FF-4166-A75E-7F80A5D5392A}']
+    function Apply(const AValue: Boolean): Boolean;
+  end;
+
+  TPcGuidFunc = function(const AValue: TGUID): TGUID;
+
+  IPcGuidNormalizer = interface
+    ['{9EC0CE37-C830-4E9A-85F7-171FDA8EA026}']
+    function Apply(const AValue: TGUID): TGUID;
+  end;
 
   IOptionalBase = interface
     ['{E4F4A971-9D82-4072-9FCD-B94B3534D00B}']
@@ -107,6 +199,7 @@ type
     function Lower: IOptString;
     function UndefinedIfEmpty: IOptString;
     function Map(AFunc: TPcStringFunc): IOptString;
+    function Normalize(ANormalizer: IPcStringNormalizer): IOptString;
   end;
 
   INullString = interface(INullable<string>)
@@ -116,6 +209,7 @@ type
     function Lower: INullString;
     function NullIfEmpty: INullString;
     function Map(AFunc: TPcStringFunc): INullString;
+    function Normalize(ANormalizer: IPcStringNormalizer): INullString;
   end;
 
   IOptNullString = interface(IOptionalNullable<string>)
@@ -126,90 +220,127 @@ type
     function NullIfEmpty: IOptNullString;
     function UndefinedIfEmpty: IOptNullString;
     function Map(AFunc: TPcStringFunc): IOptNullString;
+    function Normalize(ANormalizer: IPcStringNormalizer): IOptNullString;
   end;
 
   { Integers interfaces }
 
   IOptInteger = interface(IOptional<Integer>)
     ['{472AF43B-BC8E-42A5-B275-2D9B0BEE6667}']
+    function Map(AFunc: TPcIntegerFunc): IOptInteger;
+    function Normalize(ANormalizer: IPcIntegerNormalizer): IOptInteger;
   end;
 
   INullInteger = interface(INullable<Integer>)
     ['{C040BEFA-C342-4F0A-92AD-6FA7711FA002}']
+    function Map(AFunc: TPcIntegerFunc): INullInteger;
+    function Normalize(ANormalizer: IPcIntegerNormalizer): INullInteger;
   end;
 
   IOptNullInteger = interface(IOptionalNullable<Integer>)
     ['{6092BDE1-A122-4BFB-AF50-4947884DA9FD}']
+    function Map(AFunc: TPcIntegerFunc): IOptNullInteger;
+    function Normalize(ANormalizer: IPcIntegerNormalizer): IOptNullInteger;
   end;
 
   { Int64 interfaces }
 
   IOptInt64 = interface(IOptional<Int64>)
     ['{A6307E45-A804-4B1B-BE27-8FB393CC80F5}']
+    function Map(AFunc: TPcInt64Func): IOptInt64;
+    function Normalize(ANormalizer: IPcInt64Normalizer): IOptInt64;
   end;
 
   INullInt64 = interface(INullable<Int64>)
     ['{A497772F-B7B2-448E-8191-CE4EEEE0B6C6}']
+    function Map(AFunc: TPcInt64Func): INullInt64;
+    function Normalize(ANormalizer: IPcInt64Normalizer): INullInt64;
   end;
 
   IOptNullInt64 = interface(IOptionalNullable<Int64>)
     ['{78F13E94-E8CB-463E-B5A2-A4EC93D20D9D}']
+    function Map(AFunc: TPcInt64Func): IOptNullInt64;
+    function Normalize(ANormalizer: IPcInt64Normalizer): IOptNullInt64;
   end;
 
   { DateTime interfaces }
 
   IOptDateTime = interface(IOptional<TDateTime>)
     ['{764BCB67-F040-4BA1-B127-BA6A5BB5CEF6}']
+    function Map(AFunc: TPcDateTimeFunc): IOptDateTime;
+    function Normalize(ANormalizer: IPcDateTimeNormalizer): IOptDateTime;
   end;
 
   INullDateTime = interface(INullable<TDateTime>)
     ['{107CDFB4-20E1-4887-A1D3-9DD247798F9D}']
+    function Map(AFunc: TPcDateTimeFunc): INullDateTime;
+    function Normalize(ANormalizer: IPcDateTimeNormalizer): INullDateTime;
   end;
 
   IOptNullDateTime = interface(IOptionalNullable<TDateTime>)
     ['{1C1A3315-7A2A-4764-8E0D-40166907A10B}']
+    function Map(AFunc: TPcDateTimeFunc): IOptNullDateTime;
+    function Normalize(ANormalizer: IPcDateTimeNormalizer): IOptNullDateTime;
   end;
 
   { Boolean interfaces }
 
   IOptBoolean = interface(IOptional<Boolean>)
     ['{E7274751-2E3F-49FF-9DC0-6ED268F400F8}']
+    function Map(AFunc: TPcBooleanFunc): IOptBoolean;
+    function Normalize(ANormalizer: IPcBooleanNormalizer): IOptBoolean;
   end;
 
   INullBoolean = interface(INullable<Boolean>)
     ['{07ED6DF4-64E8-4246-BA8F-D232B6336888}']
+    function Map(AFunc: TPcBooleanFunc): INullBoolean;
+    function Normalize(ANormalizer: IPcBooleanNormalizer): INullBoolean;
   end;
 
   IOptNullBoolean = interface(IOptionalNullable<Boolean>)
     ['{E1FF6455-38A6-4999-B63D-3A1D48F54A9B}']
+    function Map(AFunc: TPcBooleanFunc): IOptNullBoolean;
+    function Normalize(ANormalizer: IPcBooleanNormalizer): IOptNullBoolean;
   end;
 
   { GUID interfaces }
 
   IOptGuid = interface(IOptional<TGUID>)
     ['{A8135F04-35BF-43EE-B345-85C784E583E0}']
+    function Map(AFunc: TPcGuidFunc): IOptGuid;
+    function Normalize(ANormalizer: IPcGuidNormalizer): IOptGuid;
   end;
 
   INullGuid = interface(INullable<TGUID>)
     ['{AD57F2C9-083B-42AE-8980-6B3CD3CE3382}']
+    function Map(AFunc: TPcGuidFunc): INullGuid;
+    function Normalize(ANormalizer: IPcGuidNormalizer): INullGuid;
   end;
 
   IOptNullGuid = interface(IOptionalNullable<TGUID>)
     ['{8B4F0499-ECE5-4881-A6AF-F9B7DD875477}']
+    function Map(AFunc: TPcGuidFunc): IOptNullGuid;
+    function Normalize(ANormalizer: IPcGuidNormalizer): IOptNullGuid;
   end;
 
   { Currency interfaces }
 
   IOptCurrency = interface(IOptional<Currency>)
     ['{79A63721-7A39-44F0-A3A8-E0C79A81432E}']
+    function Map(AFunc: TPcCurrencyFunc): IOptCurrency;
+    function Normalize(ANormalizer: IPcCurrencyNormalizer): IOptCurrency;
   end;
 
   INullCurrency = interface(INullable<Currency>)
     ['{487532A1-9B21-4E65-B8A2-C1D826B74312}']
+    function Map(AFunc: TPcCurrencyFunc): INullCurrency;
+    function Normalize(ANormalizer: IPcCurrencyNormalizer): INullCurrency;
   end;
 
   IOptNullCurrency = interface(IOptionalNullable<Currency>)
     ['{C781A329-8E2B-4F54-9321-A3C9E23D5F11}']
+    function Map(AFunc: TPcCurrencyFunc): IOptNullCurrency;
+    function Normalize(ANormalizer: IPcCurrencyNormalizer): IOptNullCurrency;
   end;
 
   IDecimalPrecision = interface
@@ -224,18 +355,24 @@ type
     ['{52B5032D-B7AD-4A12-B7C1-36D6E146D783}']
     function GetDecimalPlaces: Integer;
     property DecimalPlaces: Integer read GetDecimalPlaces;
+    function Map(AFunc: TPcSingleFunc): IOptSingle;
+    function Normalize(ANormalizer: IPcSingleNormalizer): IOptSingle;
   end;
 
   INullSingle = interface(INullable<Single>)
     ['{315FF86F-2214-4250-865C-172898105578}']
     function GetDecimalPlaces: Integer;
     property DecimalPlaces: Integer read GetDecimalPlaces;
+    function Map(AFunc: TPcSingleFunc): INullSingle;
+    function Normalize(ANormalizer: IPcSingleNormalizer): INullSingle;
   end;
 
   IOptNullSingle = interface(IOptionalNullable<Single>)
     ['{CF6A4091-6C5B-4CEE-8344-0BC3C6F02567}']
     function GetDecimalPlaces: Integer;
     property DecimalPlaces: Integer read GetDecimalPlaces;
+    function Map(AFunc: TPcSingleFunc): IOptNullSingle;
+    function Normalize(ANormalizer: IPcSingleNormalizer): IOptNullSingle;
   end;
 
   { Double interfaces }
@@ -244,18 +381,24 @@ type
     ['{6645BB6E-7837-4A4E-90B5-F1B887C9B0C2}']
     function GetDecimalPlaces: Integer;
     property DecimalPlaces: Integer read GetDecimalPlaces;
+    function Map(AFunc: TPcDoubleFunc): IOptDouble;
+    function Normalize(ANormalizer: IPcDoubleNormalizer): IOptDouble;
   end;
 
   INullDouble = interface(INullable<Double>)
     ['{01368222-01F7-4698-8ECB-45AC8D6FA901}']
     function GetDecimalPlaces: Integer;
     property DecimalPlaces: Integer read GetDecimalPlaces;
+    function Map(AFunc: TPcDoubleFunc): INullDouble;
+    function Normalize(ANormalizer: IPcDoubleNormalizer): INullDouble;
   end;
 
   IOptNullDouble = interface(IOptionalNullable<Double>)
     ['{3C030269-23A9-4379-B64F-74B3EE9EAE66}']
     function GetDecimalPlaces: Integer;
     property DecimalPlaces: Integer read GetDecimalPlaces;
+    function Map(AFunc: TPcDoubleFunc): IOptNullDouble;
+    function Normalize(ANormalizer: IPcDoubleNormalizer): IOptNullDouble;
   end;
 
   { TOptionals Helper }
@@ -288,6 +431,70 @@ type
     class function Map(const AValue: IOptString; AFunc: TPcStringFunc): IOptString; overload; static;
     class function Map(const AValue: INullString; AFunc: TPcStringFunc): INullString; overload; static;
     class function Map(const AValue: IOptNullString; AFunc: TPcStringFunc): IOptNullString; overload; static;
+    /// Map with an object: ANormalizer.Apply applied to a present value
+    /// (1.12.0). ANormalizer = nil raises EArgumentException.
+    class function Normalize(const AValue: IOptString; ANormalizer: IPcStringNormalizer): IOptString; overload; static;
+    class function Normalize(const AValue: INullString; ANormalizer: IPcStringNormalizer): INullString; overload; static;
+    class function Normalize(const AValue: IOptNullString; ANormalizer: IPcStringNormalizer): IOptNullString; overload; static;
+    // Map and Normalize for the other types: the same rules as the string
+    // ones. Single and Double keep the source's DecimalPlaces, except for a
+    // result of 0 (From's shared zero, DecimalPlaces -1).
+    // Integer (1.12.0)
+    class function Map(const AValue: IOptInteger; AFunc: TPcIntegerFunc): IOptInteger; overload; static;
+    class function Map(const AValue: INullInteger; AFunc: TPcIntegerFunc): INullInteger; overload; static;
+    class function Map(const AValue: IOptNullInteger; AFunc: TPcIntegerFunc): IOptNullInteger; overload; static;
+    class function Normalize(const AValue: IOptInteger; ANormalizer: IPcIntegerNormalizer): IOptInteger; overload; static;
+    class function Normalize(const AValue: INullInteger; ANormalizer: IPcIntegerNormalizer): INullInteger; overload; static;
+    class function Normalize(const AValue: IOptNullInteger; ANormalizer: IPcIntegerNormalizer): IOptNullInteger; overload; static;
+    // Int64 (1.12.0)
+    class function Map(const AValue: IOptInt64; AFunc: TPcInt64Func): IOptInt64; overload; static;
+    class function Map(const AValue: INullInt64; AFunc: TPcInt64Func): INullInt64; overload; static;
+    class function Map(const AValue: IOptNullInt64; AFunc: TPcInt64Func): IOptNullInt64; overload; static;
+    class function Normalize(const AValue: IOptInt64; ANormalizer: IPcInt64Normalizer): IOptInt64; overload; static;
+    class function Normalize(const AValue: INullInt64; ANormalizer: IPcInt64Normalizer): INullInt64; overload; static;
+    class function Normalize(const AValue: IOptNullInt64; ANormalizer: IPcInt64Normalizer): IOptNullInt64; overload; static;
+    // Single (1.12.0)
+    class function Map(const AValue: IOptSingle; AFunc: TPcSingleFunc): IOptSingle; overload; static;
+    class function Map(const AValue: INullSingle; AFunc: TPcSingleFunc): INullSingle; overload; static;
+    class function Map(const AValue: IOptNullSingle; AFunc: TPcSingleFunc): IOptNullSingle; overload; static;
+    class function Normalize(const AValue: IOptSingle; ANormalizer: IPcSingleNormalizer): IOptSingle; overload; static;
+    class function Normalize(const AValue: INullSingle; ANormalizer: IPcSingleNormalizer): INullSingle; overload; static;
+    class function Normalize(const AValue: IOptNullSingle; ANormalizer: IPcSingleNormalizer): IOptNullSingle; overload; static;
+    // Double (1.12.0)
+    class function Map(const AValue: IOptDouble; AFunc: TPcDoubleFunc): IOptDouble; overload; static;
+    class function Map(const AValue: INullDouble; AFunc: TPcDoubleFunc): INullDouble; overload; static;
+    class function Map(const AValue: IOptNullDouble; AFunc: TPcDoubleFunc): IOptNullDouble; overload; static;
+    class function Normalize(const AValue: IOptDouble; ANormalizer: IPcDoubleNormalizer): IOptDouble; overload; static;
+    class function Normalize(const AValue: INullDouble; ANormalizer: IPcDoubleNormalizer): INullDouble; overload; static;
+    class function Normalize(const AValue: IOptNullDouble; ANormalizer: IPcDoubleNormalizer): IOptNullDouble; overload; static;
+    // Currency (1.12.0)
+    class function Map(const AValue: IOptCurrency; AFunc: TPcCurrencyFunc): IOptCurrency; overload; static;
+    class function Map(const AValue: INullCurrency; AFunc: TPcCurrencyFunc): INullCurrency; overload; static;
+    class function Map(const AValue: IOptNullCurrency; AFunc: TPcCurrencyFunc): IOptNullCurrency; overload; static;
+    class function Normalize(const AValue: IOptCurrency; ANormalizer: IPcCurrencyNormalizer): IOptCurrency; overload; static;
+    class function Normalize(const AValue: INullCurrency; ANormalizer: IPcCurrencyNormalizer): INullCurrency; overload; static;
+    class function Normalize(const AValue: IOptNullCurrency; ANormalizer: IPcCurrencyNormalizer): IOptNullCurrency; overload; static;
+    // DateTime (1.12.0)
+    class function Map(const AValue: IOptDateTime; AFunc: TPcDateTimeFunc): IOptDateTime; overload; static;
+    class function Map(const AValue: INullDateTime; AFunc: TPcDateTimeFunc): INullDateTime; overload; static;
+    class function Map(const AValue: IOptNullDateTime; AFunc: TPcDateTimeFunc): IOptNullDateTime; overload; static;
+    class function Normalize(const AValue: IOptDateTime; ANormalizer: IPcDateTimeNormalizer): IOptDateTime; overload; static;
+    class function Normalize(const AValue: INullDateTime; ANormalizer: IPcDateTimeNormalizer): INullDateTime; overload; static;
+    class function Normalize(const AValue: IOptNullDateTime; ANormalizer: IPcDateTimeNormalizer): IOptNullDateTime; overload; static;
+    // Boolean (1.12.0)
+    class function Map(const AValue: IOptBoolean; AFunc: TPcBooleanFunc): IOptBoolean; overload; static;
+    class function Map(const AValue: INullBoolean; AFunc: TPcBooleanFunc): INullBoolean; overload; static;
+    class function Map(const AValue: IOptNullBoolean; AFunc: TPcBooleanFunc): IOptNullBoolean; overload; static;
+    class function Normalize(const AValue: IOptBoolean; ANormalizer: IPcBooleanNormalizer): IOptBoolean; overload; static;
+    class function Normalize(const AValue: INullBoolean; ANormalizer: IPcBooleanNormalizer): INullBoolean; overload; static;
+    class function Normalize(const AValue: IOptNullBoolean; ANormalizer: IPcBooleanNormalizer): IOptNullBoolean; overload; static;
+    // Guid (1.12.0)
+    class function Map(const AValue: IOptGuid; AFunc: TPcGuidFunc): IOptGuid; overload; static;
+    class function Map(const AValue: INullGuid; AFunc: TPcGuidFunc): INullGuid; overload; static;
+    class function Map(const AValue: IOptNullGuid; AFunc: TPcGuidFunc): IOptNullGuid; overload; static;
+    class function Normalize(const AValue: IOptGuid; ANormalizer: IPcGuidNormalizer): IOptGuid; overload; static;
+    class function Normalize(const AValue: INullGuid; ANormalizer: IPcGuidNormalizer): INullGuid; overload; static;
+    class function Normalize(const AValue: IOptNullGuid; ANormalizer: IPcGuidNormalizer): IOptNullGuid; overload; static;
     // String
     class function Safe(const AValue: IOptString): IOptString; overload; static;
     class function Safe(const AValue: INullString): INullString; overload; static;
@@ -380,17 +587,20 @@ type
     function IOptString.Lower = OptLower;
     function IOptString.UndefinedIfEmpty = OptUndefinedIfEmpty;
     function IOptString.Map = OptMap;
+    function IOptString.Normalize = OptNormalize;
     function INullString.Trim = NullTrim;
     function INullString.Upper = NullUpper;
     function INullString.Lower = NullLower;
     function INullString.NullIfEmpty = NullNullIfEmpty;
     function INullString.Map = NullMap;
+    function INullString.Normalize = NullNormalize;
     function IOptNullString.Trim = OptNullTrim;
     function IOptNullString.Upper = OptNullUpper;
     function IOptNullString.Lower = OptNullLower;
     function IOptNullString.NullIfEmpty = OptNullNullIfEmpty;
     function IOptNullString.UndefinedIfEmpty = OptNullUndefinedIfEmpty;
     function IOptNullString.Map = OptNullMap;
+    function IOptNullString.Normalize = OptNullNormalize;
     function AsOpt: IOptString;
     function AsNull: INullString;
     function AsOptNull: IOptNullString;
@@ -399,17 +609,20 @@ type
     function OptLower: IOptString;
     function OptUndefinedIfEmpty: IOptString;
     function OptMap(AFunc: TPcStringFunc): IOptString;
+    function OptNormalize(ANormalizer: IPcStringNormalizer): IOptString;
     function NullTrim: INullString;
     function NullUpper: INullString;
     function NullLower: INullString;
     function NullNullIfEmpty: INullString;
     function NullMap(AFunc: TPcStringFunc): INullString;
+    function NullNormalize(ANormalizer: IPcStringNormalizer): INullString;
     function OptNullTrim: IOptNullString;
     function OptNullUpper: IOptNullString;
     function OptNullLower: IOptNullString;
     function OptNullNullIfEmpty: IOptNullString;
     function OptNullUndefinedIfEmpty: IOptNullString;
     function OptNullMap(AFunc: TPcStringFunc): IOptNullString;
+    function OptNullNormalize(ANormalizer: IPcStringNormalizer): IOptNullString;
   public
     class constructor Create;
     class destructor Destroy;
@@ -433,6 +646,24 @@ type
     class var FGlobalCacheFixed: array[FIXED_CACHE_MIN..FIXED_CACHE_MAX] of IOptNullInteger;
     class var FGlobalCache: TCache;
     class var FLockCache: TCriticalSection;
+  private
+    // Map and Normalize for the three flavors (1.12.0), mapped like the
+    // string ones in TOptNullString.
+    function IOptInteger.Map = OptMap;
+    function IOptInteger.Normalize = OptNormalize;
+    function INullInteger.Map = NullMap;
+    function INullInteger.Normalize = NullNormalize;
+    function IOptNullInteger.Map = OptNullMap;
+    function IOptNullInteger.Normalize = OptNullNormalize;
+    function AsOpt: IOptInteger;
+    function AsNull: INullInteger;
+    function AsOptNull: IOptNullInteger;
+    function OptMap(AFunc: TPcIntegerFunc): IOptInteger;
+    function OptNormalize(ANormalizer: IPcIntegerNormalizer): IOptInteger;
+    function NullMap(AFunc: TPcIntegerFunc): INullInteger;
+    function NullNormalize(ANormalizer: IPcIntegerNormalizer): INullInteger;
+    function OptNullMap(AFunc: TPcIntegerFunc): IOptNullInteger;
+    function OptNullNormalize(ANormalizer: IPcIntegerNormalizer): IOptNullInteger;
   public
     class constructor Create;
     class destructor Destroy;
@@ -456,6 +687,24 @@ type
     class var FGlobalCacheFixed: array[FIXED_CACHE_MIN..FIXED_CACHE_MAX] of IOptNullInt64;
     class var FGlobalCache: TCache;
     class var FLockCache: TCriticalSection;
+  private
+    // Map and Normalize for the three flavors (1.12.0), mapped like the
+    // string ones in TOptNullString.
+    function IOptInt64.Map = OptMap;
+    function IOptInt64.Normalize = OptNormalize;
+    function INullInt64.Map = NullMap;
+    function INullInt64.Normalize = NullNormalize;
+    function IOptNullInt64.Map = OptNullMap;
+    function IOptNullInt64.Normalize = OptNullNormalize;
+    function AsOpt: IOptInt64;
+    function AsNull: INullInt64;
+    function AsOptNull: IOptNullInt64;
+    function OptMap(AFunc: TPcInt64Func): IOptInt64;
+    function OptNormalize(ANormalizer: IPcInt64Normalizer): IOptInt64;
+    function NullMap(AFunc: TPcInt64Func): INullInt64;
+    function NullNormalize(ANormalizer: IPcInt64Normalizer): INullInt64;
+    function OptNullMap(AFunc: TPcInt64Func): IOptNullInt64;
+    function OptNullNormalize(ANormalizer: IPcInt64Normalizer): IOptNullInt64;
   public
     class constructor Create;
     class destructor Destroy;
@@ -487,6 +736,24 @@ type
     class var FGlobalZero: IOptNullSingle;
     class var FGlobalCache: TCache;
     class var FLockCache: TCriticalSection;
+  private
+    // Map and Normalize for the three flavors (1.12.0), mapped like the
+    // string ones in TOptNullString.
+    function IOptSingle.Map = OptMap;
+    function IOptSingle.Normalize = OptNormalize;
+    function INullSingle.Map = NullMap;
+    function INullSingle.Normalize = NullNormalize;
+    function IOptNullSingle.Map = OptNullMap;
+    function IOptNullSingle.Normalize = OptNullNormalize;
+    function AsOpt: IOptSingle;
+    function AsNull: INullSingle;
+    function AsOptNull: IOptNullSingle;
+    function OptMap(AFunc: TPcSingleFunc): IOptSingle;
+    function OptNormalize(ANormalizer: IPcSingleNormalizer): IOptSingle;
+    function NullMap(AFunc: TPcSingleFunc): INullSingle;
+    function NullNormalize(ANormalizer: IPcSingleNormalizer): INullSingle;
+    function OptNullMap(AFunc: TPcSingleFunc): IOptNullSingle;
+    function OptNullNormalize(ANormalizer: IPcSingleNormalizer): IOptNullSingle;
   public
     class constructor Create;
     class destructor Destroy;
@@ -518,6 +785,24 @@ type
     class var FGlobalZero: IOptNullDouble;
     class var FGlobalCache: TCache;
     class var FLockCache: TCriticalSection;
+  private
+    // Map and Normalize for the three flavors (1.12.0), mapped like the
+    // string ones in TOptNullString.
+    function IOptDouble.Map = OptMap;
+    function IOptDouble.Normalize = OptNormalize;
+    function INullDouble.Map = NullMap;
+    function INullDouble.Normalize = NullNormalize;
+    function IOptNullDouble.Map = OptNullMap;
+    function IOptNullDouble.Normalize = OptNullNormalize;
+    function AsOpt: IOptDouble;
+    function AsNull: INullDouble;
+    function AsOptNull: IOptNullDouble;
+    function OptMap(AFunc: TPcDoubleFunc): IOptDouble;
+    function OptNormalize(ANormalizer: IPcDoubleNormalizer): IOptDouble;
+    function NullMap(AFunc: TPcDoubleFunc): INullDouble;
+    function NullNormalize(ANormalizer: IPcDoubleNormalizer): INullDouble;
+    function OptNullMap(AFunc: TPcDoubleFunc): IOptNullDouble;
+    function OptNullNormalize(ANormalizer: IPcDoubleNormalizer): IOptNullDouble;
   public
     class constructor Create;
     class destructor Destroy;
@@ -541,6 +826,24 @@ type
     class var FLockCacheDate: TCriticalSection;
     class var FGlobalCacheTime: TCache;
     class var FLockCacheTime: TCriticalSection;
+  private
+    // Map and Normalize for the three flavors (1.12.0), mapped like the
+    // string ones in TOptNullString.
+    function IOptDateTime.Map = OptMap;
+    function IOptDateTime.Normalize = OptNormalize;
+    function INullDateTime.Map = NullMap;
+    function INullDateTime.Normalize = NullNormalize;
+    function IOptNullDateTime.Map = OptNullMap;
+    function IOptNullDateTime.Normalize = OptNullNormalize;
+    function AsOpt: IOptDateTime;
+    function AsNull: INullDateTime;
+    function AsOptNull: IOptNullDateTime;
+    function OptMap(AFunc: TPcDateTimeFunc): IOptDateTime;
+    function OptNormalize(ANormalizer: IPcDateTimeNormalizer): IOptDateTime;
+    function NullMap(AFunc: TPcDateTimeFunc): INullDateTime;
+    function NullNormalize(ANormalizer: IPcDateTimeNormalizer): INullDateTime;
+    function OptNullMap(AFunc: TPcDateTimeFunc): IOptNullDateTime;
+    function OptNullNormalize(ANormalizer: IPcDateTimeNormalizer): IOptNullDateTime;
   public
     class constructor Create;
     class destructor Destroy;
@@ -558,6 +861,24 @@ type
     class var FGlobalUndefined: IOptNullBoolean;
     class var FGlobalTrue: IOptNullBoolean;
     class var FGlobalFalse: IOptNullBoolean;
+  private
+    // Map and Normalize for the three flavors (1.12.0), mapped like the
+    // string ones in TOptNullString.
+    function IOptBoolean.Map = OptMap;
+    function IOptBoolean.Normalize = OptNormalize;
+    function INullBoolean.Map = NullMap;
+    function INullBoolean.Normalize = NullNormalize;
+    function IOptNullBoolean.Map = OptNullMap;
+    function IOptNullBoolean.Normalize = OptNullNormalize;
+    function AsOpt: IOptBoolean;
+    function AsNull: INullBoolean;
+    function AsOptNull: IOptNullBoolean;
+    function OptMap(AFunc: TPcBooleanFunc): IOptBoolean;
+    function OptNormalize(ANormalizer: IPcBooleanNormalizer): IOptBoolean;
+    function NullMap(AFunc: TPcBooleanFunc): INullBoolean;
+    function NullNormalize(ANormalizer: IPcBooleanNormalizer): INullBoolean;
+    function OptNullMap(AFunc: TPcBooleanFunc): IOptNullBoolean;
+    function OptNullNormalize(ANormalizer: IPcBooleanNormalizer): IOptNullBoolean;
   public
     class constructor Create;
     class destructor Destroy;
@@ -581,6 +902,24 @@ type
     class var FGlobalEmpty: IOptNullGuid;
     class var FGlobalCache: TCache;
     class var FLockCache: TCriticalSection;
+  private
+    // Map and Normalize for the three flavors (1.12.0), mapped like the
+    // string ones in TOptNullString.
+    function IOptGuid.Map = OptMap;
+    function IOptGuid.Normalize = OptNormalize;
+    function INullGuid.Map = NullMap;
+    function INullGuid.Normalize = NullNormalize;
+    function IOptNullGuid.Map = OptNullMap;
+    function IOptNullGuid.Normalize = OptNullNormalize;
+    function AsOpt: IOptGuid;
+    function AsNull: INullGuid;
+    function AsOptNull: IOptNullGuid;
+    function OptMap(AFunc: TPcGuidFunc): IOptGuid;
+    function OptNormalize(ANormalizer: IPcGuidNormalizer): IOptGuid;
+    function NullMap(AFunc: TPcGuidFunc): INullGuid;
+    function NullNormalize(ANormalizer: IPcGuidNormalizer): INullGuid;
+    function OptNullMap(AFunc: TPcGuidFunc): IOptNullGuid;
+    function OptNullNormalize(ANormalizer: IPcGuidNormalizer): IOptNullGuid;
   public
     class constructor Create;
     class destructor Destroy;
@@ -602,6 +941,24 @@ type
     class var FGlobalZero: IOptNullCurrency;
     class var FGlobalCache: TCache;
     class var FLockCache: TCriticalSection;
+  private
+    // Map and Normalize for the three flavors (1.12.0), mapped like the
+    // string ones in TOptNullString.
+    function IOptCurrency.Map = OptMap;
+    function IOptCurrency.Normalize = OptNormalize;
+    function INullCurrency.Map = NullMap;
+    function INullCurrency.Normalize = NullNormalize;
+    function IOptNullCurrency.Map = OptNullMap;
+    function IOptNullCurrency.Normalize = OptNullNormalize;
+    function AsOpt: IOptCurrency;
+    function AsNull: INullCurrency;
+    function AsOptNull: IOptNullCurrency;
+    function OptMap(AFunc: TPcCurrencyFunc): IOptCurrency;
+    function OptNormalize(ANormalizer: IPcCurrencyNormalizer): IOptCurrency;
+    function NullMap(AFunc: TPcCurrencyFunc): INullCurrency;
+    function NullNormalize(ANormalizer: IPcCurrencyNormalizer): INullCurrency;
+    function OptNullMap(AFunc: TPcCurrencyFunc): IOptNullCurrency;
+    function OptNullNormalize(ANormalizer: IPcCurrencyNormalizer): IOptNullCurrency;
   public
     class constructor Create;
     class destructor Destroy;
@@ -722,7 +1079,27 @@ begin
     raise EArgumentException.Create('TOptionals.Map: AFunc is nil');
 end;
 
-function MapOpt(const AValue: IOptString; AFunc: TPcStringFunc): IOptString;
+procedure CheckNormalizer(ANormalizer: IPcStringNormalizer);
+begin
+  if not Assigned(ANormalizer) then
+    raise EArgumentException.Create('TOptionals.Normalize: ANormalizer is nil');
+end;
+
+{ The helpers below take the transformation as a function or as a
+  normalizer (exactly one of them assigned), so the function form, used by
+  Trim/Upper/Lower on every call, doesn't allocate a wrapper object. }
+
+function Transform(AFunc: TPcStringFunc; ANormalizer: IPcStringNormalizer;
+  const AValue: string): string;
+begin
+  if Assigned(AFunc) then
+    Result := AFunc(AValue)
+  else
+    Result := ANormalizer.Apply(AValue);
+end;
+
+function MapOpt(const AValue: IOptString; AFunc: TPcStringFunc;
+  ANormalizer: IPcStringNormalizer = nil): IOptString;
 var
   LOld, LNew: string;
 begin
@@ -731,14 +1108,15 @@ begin
   if IsHiddenNull(AValue) then
     Exit(AValue);
   LOld := AValue.Value;
-  LNew := AFunc(LOld);
+  LNew := Transform(AFunc, ANormalizer, LOld);
   if LNew = LOld then
     Result := AValue
   else
     Result := TOptNullString.From(LNew);
 end;
 
-function MapNull(const AValue: INullString; AFunc: TPcStringFunc): INullString;
+function MapNull(const AValue: INullString; AFunc: TPcStringFunc;
+  ANormalizer: IPcStringNormalizer = nil): INullString;
 var
   LOld, LNew: string;
 begin
@@ -747,25 +1125,506 @@ begin
   if IsHiddenUndefined(AValue) then
     Exit(AValue);
   LOld := AValue.Value;
-  LNew := AFunc(LOld);
+  LNew := Transform(AFunc, ANormalizer, LOld);
   if LNew = LOld then
     Result := AValue
   else
     Result := TOptNullString.From(LNew);
 end;
 
-function MapOptNull(const AValue: IOptNullString; AFunc: TPcStringFunc): IOptNullString;
+function MapOptNull(const AValue: IOptNullString; AFunc: TPcStringFunc;
+  ANormalizer: IPcStringNormalizer = nil): IOptNullString;
 var
   LOld, LNew: string;
 begin
   if not Assigned(AValue) or not AValue.HasValue or AValue.IsNull then
     Exit(TOptionals.Safe(AValue));
   LOld := AValue.Value;
-  LNew := AFunc(LOld);
+  LNew := Transform(AFunc, ANormalizer, LOld);
   if LNew = LOld then
     Result := AValue
   else
     Result := TOptNullString.From(LNew);
+end;
+
+{ Map and Normalize for the other types: the same steps as MapOpt, MapNull
+  and MapOptNull above, one set per type (generated; keep them alike). }
+
+procedure RaiseNilMapArgument(const AName: string);
+begin
+  raise EArgumentException.Create('TOptionals.' + AName + ' is nil');
+end;
+
+function BooleanOf(AValue: Boolean): TOptNullBoolean;
+begin
+  if AValue then
+    Result := TOptNullBoolean.TrueValue
+  else
+    Result := TOptNullBoolean.FalseValue;
+end;
+
+function MapOptInteger(const AValue: IOptInteger; AFunc: TPcIntegerFunc;
+  ANormalizer: IPcIntegerNormalizer): IOptInteger;
+var
+  LOld, LNew: Integer;
+begin
+  if not Assigned(AValue) or not AValue.HasValue then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenNull(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullInteger.From(LNew);
+end;
+
+function MapNullInteger(const AValue: INullInteger; AFunc: TPcIntegerFunc;
+  ANormalizer: IPcIntegerNormalizer): INullInteger;
+var
+  LOld, LNew: Integer;
+begin
+  if not Assigned(AValue) or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenUndefined(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullInteger.From(LNew);
+end;
+
+function MapOptNullInteger(const AValue: IOptNullInteger; AFunc: TPcIntegerFunc;
+  ANormalizer: IPcIntegerNormalizer): IOptNullInteger;
+var
+  LOld, LNew: Integer;
+begin
+  if not Assigned(AValue) or not AValue.HasValue or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullInteger.From(LNew);
+end;
+
+function MapOptInt64(const AValue: IOptInt64; AFunc: TPcInt64Func;
+  ANormalizer: IPcInt64Normalizer): IOptInt64;
+var
+  LOld, LNew: Int64;
+begin
+  if not Assigned(AValue) or not AValue.HasValue then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenNull(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullInt64.From(LNew);
+end;
+
+function MapNullInt64(const AValue: INullInt64; AFunc: TPcInt64Func;
+  ANormalizer: IPcInt64Normalizer): INullInt64;
+var
+  LOld, LNew: Int64;
+begin
+  if not Assigned(AValue) or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenUndefined(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullInt64.From(LNew);
+end;
+
+function MapOptNullInt64(const AValue: IOptNullInt64; AFunc: TPcInt64Func;
+  ANormalizer: IPcInt64Normalizer): IOptNullInt64;
+var
+  LOld, LNew: Int64;
+begin
+  if not Assigned(AValue) or not AValue.HasValue or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullInt64.From(LNew);
+end;
+
+function MapOptSingle(const AValue: IOptSingle; AFunc: TPcSingleFunc;
+  ANormalizer: IPcSingleNormalizer): IOptSingle;
+var
+  LOld, LNew: Single;
+begin
+  if not Assigned(AValue) or not AValue.HasValue then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenNull(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullSingle.From(LNew, AValue.DecimalPlaces);
+end;
+
+function MapNullSingle(const AValue: INullSingle; AFunc: TPcSingleFunc;
+  ANormalizer: IPcSingleNormalizer): INullSingle;
+var
+  LOld, LNew: Single;
+begin
+  if not Assigned(AValue) or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenUndefined(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullSingle.From(LNew, AValue.DecimalPlaces);
+end;
+
+function MapOptNullSingle(const AValue: IOptNullSingle; AFunc: TPcSingleFunc;
+  ANormalizer: IPcSingleNormalizer): IOptNullSingle;
+var
+  LOld, LNew: Single;
+begin
+  if not Assigned(AValue) or not AValue.HasValue or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullSingle.From(LNew, AValue.DecimalPlaces);
+end;
+
+function MapOptDouble(const AValue: IOptDouble; AFunc: TPcDoubleFunc;
+  ANormalizer: IPcDoubleNormalizer): IOptDouble;
+var
+  LOld, LNew: Double;
+begin
+  if not Assigned(AValue) or not AValue.HasValue then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenNull(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullDouble.From(LNew, AValue.DecimalPlaces);
+end;
+
+function MapNullDouble(const AValue: INullDouble; AFunc: TPcDoubleFunc;
+  ANormalizer: IPcDoubleNormalizer): INullDouble;
+var
+  LOld, LNew: Double;
+begin
+  if not Assigned(AValue) or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenUndefined(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullDouble.From(LNew, AValue.DecimalPlaces);
+end;
+
+function MapOptNullDouble(const AValue: IOptNullDouble; AFunc: TPcDoubleFunc;
+  ANormalizer: IPcDoubleNormalizer): IOptNullDouble;
+var
+  LOld, LNew: Double;
+begin
+  if not Assigned(AValue) or not AValue.HasValue or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullDouble.From(LNew, AValue.DecimalPlaces);
+end;
+
+function MapOptCurrency(const AValue: IOptCurrency; AFunc: TPcCurrencyFunc;
+  ANormalizer: IPcCurrencyNormalizer): IOptCurrency;
+var
+  LOld, LNew: Currency;
+begin
+  if not Assigned(AValue) or not AValue.HasValue then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenNull(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullCurrency.From(LNew);
+end;
+
+function MapNullCurrency(const AValue: INullCurrency; AFunc: TPcCurrencyFunc;
+  ANormalizer: IPcCurrencyNormalizer): INullCurrency;
+var
+  LOld, LNew: Currency;
+begin
+  if not Assigned(AValue) or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenUndefined(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullCurrency.From(LNew);
+end;
+
+function MapOptNullCurrency(const AValue: IOptNullCurrency; AFunc: TPcCurrencyFunc;
+  ANormalizer: IPcCurrencyNormalizer): IOptNullCurrency;
+var
+  LOld, LNew: Currency;
+begin
+  if not Assigned(AValue) or not AValue.HasValue or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullCurrency.From(LNew);
+end;
+
+function MapOptDateTime(const AValue: IOptDateTime; AFunc: TPcDateTimeFunc;
+  ANormalizer: IPcDateTimeNormalizer): IOptDateTime;
+var
+  LOld, LNew: TDateTime;
+begin
+  if not Assigned(AValue) or not AValue.HasValue then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenNull(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullDateTime.From(LNew);
+end;
+
+function MapNullDateTime(const AValue: INullDateTime; AFunc: TPcDateTimeFunc;
+  ANormalizer: IPcDateTimeNormalizer): INullDateTime;
+var
+  LOld, LNew: TDateTime;
+begin
+  if not Assigned(AValue) or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenUndefined(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullDateTime.From(LNew);
+end;
+
+function MapOptNullDateTime(const AValue: IOptNullDateTime; AFunc: TPcDateTimeFunc;
+  ANormalizer: IPcDateTimeNormalizer): IOptNullDateTime;
+var
+  LOld, LNew: TDateTime;
+begin
+  if not Assigned(AValue) or not AValue.HasValue or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := TOptNullDateTime.From(LNew);
+end;
+
+function MapOptBoolean(const AValue: IOptBoolean; AFunc: TPcBooleanFunc;
+  ANormalizer: IPcBooleanNormalizer): IOptBoolean;
+var
+  LOld, LNew: Boolean;
+begin
+  if not Assigned(AValue) or not AValue.HasValue then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenNull(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := BooleanOf(LNew);
+end;
+
+function MapNullBoolean(const AValue: INullBoolean; AFunc: TPcBooleanFunc;
+  ANormalizer: IPcBooleanNormalizer): INullBoolean;
+var
+  LOld, LNew: Boolean;
+begin
+  if not Assigned(AValue) or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenUndefined(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := BooleanOf(LNew);
+end;
+
+function MapOptNullBoolean(const AValue: IOptNullBoolean; AFunc: TPcBooleanFunc;
+  ANormalizer: IPcBooleanNormalizer): IOptNullBoolean;
+var
+  LOld, LNew: Boolean;
+begin
+  if not Assigned(AValue) or not AValue.HasValue or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if LNew = LOld then
+    Result := AValue
+  else
+    Result := BooleanOf(LNew);
+end;
+
+function MapOptGuid(const AValue: IOptGuid; AFunc: TPcGuidFunc;
+  ANormalizer: IPcGuidNormalizer): IOptGuid;
+var
+  LOld, LNew: TGUID;
+begin
+  if not Assigned(AValue) or not AValue.HasValue then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenNull(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if IsEqualGUID(LNew, LOld) then
+    Result := AValue
+  else
+    Result := TOptNullGuid.From(LNew);
+end;
+
+function MapNullGuid(const AValue: INullGuid; AFunc: TPcGuidFunc;
+  ANormalizer: IPcGuidNormalizer): INullGuid;
+var
+  LOld, LNew: TGUID;
+begin
+  if not Assigned(AValue) or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  if IsHiddenUndefined(AValue) then
+    Exit(AValue);
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if IsEqualGUID(LNew, LOld) then
+    Result := AValue
+  else
+    Result := TOptNullGuid.From(LNew);
+end;
+
+function MapOptNullGuid(const AValue: IOptNullGuid; AFunc: TPcGuidFunc;
+  ANormalizer: IPcGuidNormalizer): IOptNullGuid;
+var
+  LOld, LNew: TGUID;
+begin
+  if not Assigned(AValue) or not AValue.HasValue or AValue.IsNull then
+    Exit(TOptionals.Safe(AValue));
+  LOld := AValue.Value;
+  if Assigned(AFunc) then
+    LNew := AFunc(LOld)
+  else
+    LNew := ANormalizer.Apply(LOld);
+  if IsEqualGUID(LNew, LOld) then
+    Result := AValue
+  else
+    Result := TOptNullGuid.From(LNew);
 end;
 
 { TOptionals }
@@ -859,6 +1718,360 @@ class function TOptionals.Map(const AValue: IOptNullString; AFunc: TPcStringFunc
 begin
   CheckFunc(AFunc);
   Result := MapOptNull(AValue, AFunc);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptString; ANormalizer: IPcStringNormalizer): IOptString;
+begin
+  CheckNormalizer(ANormalizer);
+  Result := MapOpt(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Normalize(const AValue: INullString; ANormalizer: IPcStringNormalizer): INullString;
+begin
+  CheckNormalizer(ANormalizer);
+  Result := MapNull(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptNullString; ANormalizer: IPcStringNormalizer): IOptNullString;
+begin
+  CheckNormalizer(ANormalizer);
+  Result := MapOptNull(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptInteger; AFunc: TPcIntegerFunc): IOptInteger;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptInteger(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptInteger; ANormalizer: IPcIntegerNormalizer): IOptInteger;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptInteger(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: INullInteger; AFunc: TPcIntegerFunc): INullInteger;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapNullInteger(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: INullInteger; ANormalizer: IPcIntegerNormalizer): INullInteger;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapNullInteger(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptNullInteger; AFunc: TPcIntegerFunc): IOptNullInteger;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptNullInteger(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptNullInteger; ANormalizer: IPcIntegerNormalizer): IOptNullInteger;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptNullInteger(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptInt64; AFunc: TPcInt64Func): IOptInt64;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptInt64(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptInt64; ANormalizer: IPcInt64Normalizer): IOptInt64;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptInt64(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: INullInt64; AFunc: TPcInt64Func): INullInt64;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapNullInt64(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: INullInt64; ANormalizer: IPcInt64Normalizer): INullInt64;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapNullInt64(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptNullInt64; AFunc: TPcInt64Func): IOptNullInt64;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptNullInt64(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptNullInt64; ANormalizer: IPcInt64Normalizer): IOptNullInt64;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptNullInt64(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptSingle; AFunc: TPcSingleFunc): IOptSingle;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptSingle(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptSingle; ANormalizer: IPcSingleNormalizer): IOptSingle;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptSingle(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: INullSingle; AFunc: TPcSingleFunc): INullSingle;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapNullSingle(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: INullSingle; ANormalizer: IPcSingleNormalizer): INullSingle;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapNullSingle(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptNullSingle; AFunc: TPcSingleFunc): IOptNullSingle;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptNullSingle(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptNullSingle; ANormalizer: IPcSingleNormalizer): IOptNullSingle;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptNullSingle(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptDouble; AFunc: TPcDoubleFunc): IOptDouble;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptDouble(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptDouble; ANormalizer: IPcDoubleNormalizer): IOptDouble;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptDouble(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: INullDouble; AFunc: TPcDoubleFunc): INullDouble;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapNullDouble(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: INullDouble; ANormalizer: IPcDoubleNormalizer): INullDouble;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapNullDouble(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptNullDouble; AFunc: TPcDoubleFunc): IOptNullDouble;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptNullDouble(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptNullDouble; ANormalizer: IPcDoubleNormalizer): IOptNullDouble;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptNullDouble(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptCurrency; AFunc: TPcCurrencyFunc): IOptCurrency;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptCurrency(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptCurrency; ANormalizer: IPcCurrencyNormalizer): IOptCurrency;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptCurrency(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: INullCurrency; AFunc: TPcCurrencyFunc): INullCurrency;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapNullCurrency(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: INullCurrency; ANormalizer: IPcCurrencyNormalizer): INullCurrency;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapNullCurrency(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptNullCurrency; AFunc: TPcCurrencyFunc): IOptNullCurrency;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptNullCurrency(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptNullCurrency; ANormalizer: IPcCurrencyNormalizer): IOptNullCurrency;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptNullCurrency(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptDateTime; AFunc: TPcDateTimeFunc): IOptDateTime;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptDateTime(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptDateTime; ANormalizer: IPcDateTimeNormalizer): IOptDateTime;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptDateTime(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: INullDateTime; AFunc: TPcDateTimeFunc): INullDateTime;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapNullDateTime(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: INullDateTime; ANormalizer: IPcDateTimeNormalizer): INullDateTime;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapNullDateTime(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptNullDateTime; AFunc: TPcDateTimeFunc): IOptNullDateTime;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptNullDateTime(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptNullDateTime; ANormalizer: IPcDateTimeNormalizer): IOptNullDateTime;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptNullDateTime(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptBoolean; AFunc: TPcBooleanFunc): IOptBoolean;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptBoolean(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptBoolean; ANormalizer: IPcBooleanNormalizer): IOptBoolean;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptBoolean(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: INullBoolean; AFunc: TPcBooleanFunc): INullBoolean;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapNullBoolean(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: INullBoolean; ANormalizer: IPcBooleanNormalizer): INullBoolean;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapNullBoolean(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptNullBoolean; AFunc: TPcBooleanFunc): IOptNullBoolean;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptNullBoolean(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptNullBoolean; ANormalizer: IPcBooleanNormalizer): IOptNullBoolean;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptNullBoolean(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptGuid; AFunc: TPcGuidFunc): IOptGuid;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptGuid(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptGuid; ANormalizer: IPcGuidNormalizer): IOptGuid;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptGuid(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: INullGuid; AFunc: TPcGuidFunc): INullGuid;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapNullGuid(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: INullGuid; ANormalizer: IPcGuidNormalizer): INullGuid;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapNullGuid(AValue, nil, ANormalizer);
+end;
+
+class function TOptionals.Map(const AValue: IOptNullGuid; AFunc: TPcGuidFunc): IOptNullGuid;
+begin
+  if not Assigned(AFunc) then
+    RaiseNilMapArgument('Map: AFunc');
+  Result := MapOptNullGuid(AValue, AFunc, nil);
+end;
+
+class function TOptionals.Normalize(const AValue: IOptNullGuid; ANormalizer: IPcGuidNormalizer): IOptNullGuid;
+begin
+  if not Assigned(ANormalizer) then
+    RaiseNilMapArgument('Normalize: ANormalizer');
+  Result := MapOptNullGuid(AValue, nil, ANormalizer);
 end;
 
 class function TOptionals.Safe(const AValue: IOptString): IOptString;
@@ -1211,6 +2424,11 @@ begin
   Result := TOptionals.Map(AsOpt, AFunc);
 end;
 
+function TOptNullString.OptNormalize(ANormalizer: IPcStringNormalizer): IOptString;
+begin
+  Result := TOptionals.Normalize(AsOpt, ANormalizer);
+end;
+
 function TOptNullString.NullTrim: INullString;
 begin
   Result := TOptionals.Trim(AsNull);
@@ -1234,6 +2452,11 @@ end;
 function TOptNullString.NullMap(AFunc: TPcStringFunc): INullString;
 begin
   Result := TOptionals.Map(AsNull, AFunc);
+end;
+
+function TOptNullString.NullNormalize(ANormalizer: IPcStringNormalizer): INullString;
+begin
+  Result := TOptionals.Normalize(AsNull, ANormalizer);
 end;
 
 function TOptNullString.OptNullTrim: IOptNullString;
@@ -1264,6 +2487,11 @@ end;
 function TOptNullString.OptNullMap(AFunc: TPcStringFunc): IOptNullString;
 begin
   Result := TOptionals.Map(AsOptNull, AFunc);
+end;
+
+function TOptNullString.OptNullNormalize(ANormalizer: IPcStringNormalizer): IOptNullString;
+begin
+  Result := TOptionals.Normalize(AsOptNull, ANormalizer);
 end;
 
 { TOptNullInteger }
@@ -1735,6 +2963,382 @@ begin
   end;
 
   Result := Obj as TOptNullCurrency;
+end;
+
+{ TOptNullInteger: Map and Normalize }
+
+function TOptNullInteger.AsOpt: IOptInteger;
+begin
+  Result := Self;
+end;
+
+function TOptNullInteger.AsNull: INullInteger;
+begin
+  Result := Self;
+end;
+
+function TOptNullInteger.AsOptNull: IOptNullInteger;
+begin
+  Result := Self;
+end;
+
+function TOptNullInteger.OptMap(AFunc: TPcIntegerFunc): IOptInteger;
+begin
+  Result := TOptionals.Map(AsOpt, AFunc);
+end;
+
+function TOptNullInteger.OptNormalize(ANormalizer: IPcIntegerNormalizer): IOptInteger;
+begin
+  Result := TOptionals.Normalize(AsOpt, ANormalizer);
+end;
+
+function TOptNullInteger.NullMap(AFunc: TPcIntegerFunc): INullInteger;
+begin
+  Result := TOptionals.Map(AsNull, AFunc);
+end;
+
+function TOptNullInteger.NullNormalize(ANormalizer: IPcIntegerNormalizer): INullInteger;
+begin
+  Result := TOptionals.Normalize(AsNull, ANormalizer);
+end;
+
+function TOptNullInteger.OptNullMap(AFunc: TPcIntegerFunc): IOptNullInteger;
+begin
+  Result := TOptionals.Map(AsOptNull, AFunc);
+end;
+
+function TOptNullInteger.OptNullNormalize(ANormalizer: IPcIntegerNormalizer): IOptNullInteger;
+begin
+  Result := TOptionals.Normalize(AsOptNull, ANormalizer);
+end;
+
+{ TOptNullInt64: Map and Normalize }
+
+function TOptNullInt64.AsOpt: IOptInt64;
+begin
+  Result := Self;
+end;
+
+function TOptNullInt64.AsNull: INullInt64;
+begin
+  Result := Self;
+end;
+
+function TOptNullInt64.AsOptNull: IOptNullInt64;
+begin
+  Result := Self;
+end;
+
+function TOptNullInt64.OptMap(AFunc: TPcInt64Func): IOptInt64;
+begin
+  Result := TOptionals.Map(AsOpt, AFunc);
+end;
+
+function TOptNullInt64.OptNormalize(ANormalizer: IPcInt64Normalizer): IOptInt64;
+begin
+  Result := TOptionals.Normalize(AsOpt, ANormalizer);
+end;
+
+function TOptNullInt64.NullMap(AFunc: TPcInt64Func): INullInt64;
+begin
+  Result := TOptionals.Map(AsNull, AFunc);
+end;
+
+function TOptNullInt64.NullNormalize(ANormalizer: IPcInt64Normalizer): INullInt64;
+begin
+  Result := TOptionals.Normalize(AsNull, ANormalizer);
+end;
+
+function TOptNullInt64.OptNullMap(AFunc: TPcInt64Func): IOptNullInt64;
+begin
+  Result := TOptionals.Map(AsOptNull, AFunc);
+end;
+
+function TOptNullInt64.OptNullNormalize(ANormalizer: IPcInt64Normalizer): IOptNullInt64;
+begin
+  Result := TOptionals.Normalize(AsOptNull, ANormalizer);
+end;
+
+{ TOptNullSingle: Map and Normalize }
+
+function TOptNullSingle.AsOpt: IOptSingle;
+begin
+  Result := Self;
+end;
+
+function TOptNullSingle.AsNull: INullSingle;
+begin
+  Result := Self;
+end;
+
+function TOptNullSingle.AsOptNull: IOptNullSingle;
+begin
+  Result := Self;
+end;
+
+function TOptNullSingle.OptMap(AFunc: TPcSingleFunc): IOptSingle;
+begin
+  Result := TOptionals.Map(AsOpt, AFunc);
+end;
+
+function TOptNullSingle.OptNormalize(ANormalizer: IPcSingleNormalizer): IOptSingle;
+begin
+  Result := TOptionals.Normalize(AsOpt, ANormalizer);
+end;
+
+function TOptNullSingle.NullMap(AFunc: TPcSingleFunc): INullSingle;
+begin
+  Result := TOptionals.Map(AsNull, AFunc);
+end;
+
+function TOptNullSingle.NullNormalize(ANormalizer: IPcSingleNormalizer): INullSingle;
+begin
+  Result := TOptionals.Normalize(AsNull, ANormalizer);
+end;
+
+function TOptNullSingle.OptNullMap(AFunc: TPcSingleFunc): IOptNullSingle;
+begin
+  Result := TOptionals.Map(AsOptNull, AFunc);
+end;
+
+function TOptNullSingle.OptNullNormalize(ANormalizer: IPcSingleNormalizer): IOptNullSingle;
+begin
+  Result := TOptionals.Normalize(AsOptNull, ANormalizer);
+end;
+
+{ TOptNullDouble: Map and Normalize }
+
+function TOptNullDouble.AsOpt: IOptDouble;
+begin
+  Result := Self;
+end;
+
+function TOptNullDouble.AsNull: INullDouble;
+begin
+  Result := Self;
+end;
+
+function TOptNullDouble.AsOptNull: IOptNullDouble;
+begin
+  Result := Self;
+end;
+
+function TOptNullDouble.OptMap(AFunc: TPcDoubleFunc): IOptDouble;
+begin
+  Result := TOptionals.Map(AsOpt, AFunc);
+end;
+
+function TOptNullDouble.OptNormalize(ANormalizer: IPcDoubleNormalizer): IOptDouble;
+begin
+  Result := TOptionals.Normalize(AsOpt, ANormalizer);
+end;
+
+function TOptNullDouble.NullMap(AFunc: TPcDoubleFunc): INullDouble;
+begin
+  Result := TOptionals.Map(AsNull, AFunc);
+end;
+
+function TOptNullDouble.NullNormalize(ANormalizer: IPcDoubleNormalizer): INullDouble;
+begin
+  Result := TOptionals.Normalize(AsNull, ANormalizer);
+end;
+
+function TOptNullDouble.OptNullMap(AFunc: TPcDoubleFunc): IOptNullDouble;
+begin
+  Result := TOptionals.Map(AsOptNull, AFunc);
+end;
+
+function TOptNullDouble.OptNullNormalize(ANormalizer: IPcDoubleNormalizer): IOptNullDouble;
+begin
+  Result := TOptionals.Normalize(AsOptNull, ANormalizer);
+end;
+
+{ TOptNullCurrency: Map and Normalize }
+
+function TOptNullCurrency.AsOpt: IOptCurrency;
+begin
+  Result := Self;
+end;
+
+function TOptNullCurrency.AsNull: INullCurrency;
+begin
+  Result := Self;
+end;
+
+function TOptNullCurrency.AsOptNull: IOptNullCurrency;
+begin
+  Result := Self;
+end;
+
+function TOptNullCurrency.OptMap(AFunc: TPcCurrencyFunc): IOptCurrency;
+begin
+  Result := TOptionals.Map(AsOpt, AFunc);
+end;
+
+function TOptNullCurrency.OptNormalize(ANormalizer: IPcCurrencyNormalizer): IOptCurrency;
+begin
+  Result := TOptionals.Normalize(AsOpt, ANormalizer);
+end;
+
+function TOptNullCurrency.NullMap(AFunc: TPcCurrencyFunc): INullCurrency;
+begin
+  Result := TOptionals.Map(AsNull, AFunc);
+end;
+
+function TOptNullCurrency.NullNormalize(ANormalizer: IPcCurrencyNormalizer): INullCurrency;
+begin
+  Result := TOptionals.Normalize(AsNull, ANormalizer);
+end;
+
+function TOptNullCurrency.OptNullMap(AFunc: TPcCurrencyFunc): IOptNullCurrency;
+begin
+  Result := TOptionals.Map(AsOptNull, AFunc);
+end;
+
+function TOptNullCurrency.OptNullNormalize(ANormalizer: IPcCurrencyNormalizer): IOptNullCurrency;
+begin
+  Result := TOptionals.Normalize(AsOptNull, ANormalizer);
+end;
+
+{ TOptNullDateTime: Map and Normalize }
+
+function TOptNullDateTime.AsOpt: IOptDateTime;
+begin
+  Result := Self;
+end;
+
+function TOptNullDateTime.AsNull: INullDateTime;
+begin
+  Result := Self;
+end;
+
+function TOptNullDateTime.AsOptNull: IOptNullDateTime;
+begin
+  Result := Self;
+end;
+
+function TOptNullDateTime.OptMap(AFunc: TPcDateTimeFunc): IOptDateTime;
+begin
+  Result := TOptionals.Map(AsOpt, AFunc);
+end;
+
+function TOptNullDateTime.OptNormalize(ANormalizer: IPcDateTimeNormalizer): IOptDateTime;
+begin
+  Result := TOptionals.Normalize(AsOpt, ANormalizer);
+end;
+
+function TOptNullDateTime.NullMap(AFunc: TPcDateTimeFunc): INullDateTime;
+begin
+  Result := TOptionals.Map(AsNull, AFunc);
+end;
+
+function TOptNullDateTime.NullNormalize(ANormalizer: IPcDateTimeNormalizer): INullDateTime;
+begin
+  Result := TOptionals.Normalize(AsNull, ANormalizer);
+end;
+
+function TOptNullDateTime.OptNullMap(AFunc: TPcDateTimeFunc): IOptNullDateTime;
+begin
+  Result := TOptionals.Map(AsOptNull, AFunc);
+end;
+
+function TOptNullDateTime.OptNullNormalize(ANormalizer: IPcDateTimeNormalizer): IOptNullDateTime;
+begin
+  Result := TOptionals.Normalize(AsOptNull, ANormalizer);
+end;
+
+{ TOptNullBoolean: Map and Normalize }
+
+function TOptNullBoolean.AsOpt: IOptBoolean;
+begin
+  Result := Self;
+end;
+
+function TOptNullBoolean.AsNull: INullBoolean;
+begin
+  Result := Self;
+end;
+
+function TOptNullBoolean.AsOptNull: IOptNullBoolean;
+begin
+  Result := Self;
+end;
+
+function TOptNullBoolean.OptMap(AFunc: TPcBooleanFunc): IOptBoolean;
+begin
+  Result := TOptionals.Map(AsOpt, AFunc);
+end;
+
+function TOptNullBoolean.OptNormalize(ANormalizer: IPcBooleanNormalizer): IOptBoolean;
+begin
+  Result := TOptionals.Normalize(AsOpt, ANormalizer);
+end;
+
+function TOptNullBoolean.NullMap(AFunc: TPcBooleanFunc): INullBoolean;
+begin
+  Result := TOptionals.Map(AsNull, AFunc);
+end;
+
+function TOptNullBoolean.NullNormalize(ANormalizer: IPcBooleanNormalizer): INullBoolean;
+begin
+  Result := TOptionals.Normalize(AsNull, ANormalizer);
+end;
+
+function TOptNullBoolean.OptNullMap(AFunc: TPcBooleanFunc): IOptNullBoolean;
+begin
+  Result := TOptionals.Map(AsOptNull, AFunc);
+end;
+
+function TOptNullBoolean.OptNullNormalize(ANormalizer: IPcBooleanNormalizer): IOptNullBoolean;
+begin
+  Result := TOptionals.Normalize(AsOptNull, ANormalizer);
+end;
+
+{ TOptNullGuid: Map and Normalize }
+
+function TOptNullGuid.AsOpt: IOptGuid;
+begin
+  Result := Self;
+end;
+
+function TOptNullGuid.AsNull: INullGuid;
+begin
+  Result := Self;
+end;
+
+function TOptNullGuid.AsOptNull: IOptNullGuid;
+begin
+  Result := Self;
+end;
+
+function TOptNullGuid.OptMap(AFunc: TPcGuidFunc): IOptGuid;
+begin
+  Result := TOptionals.Map(AsOpt, AFunc);
+end;
+
+function TOptNullGuid.OptNormalize(ANormalizer: IPcGuidNormalizer): IOptGuid;
+begin
+  Result := TOptionals.Normalize(AsOpt, ANormalizer);
+end;
+
+function TOptNullGuid.NullMap(AFunc: TPcGuidFunc): INullGuid;
+begin
+  Result := TOptionals.Map(AsNull, AFunc);
+end;
+
+function TOptNullGuid.NullNormalize(ANormalizer: IPcGuidNormalizer): INullGuid;
+begin
+  Result := TOptionals.Normalize(AsNull, ANormalizer);
+end;
+
+function TOptNullGuid.OptNullMap(AFunc: TPcGuidFunc): IOptNullGuid;
+begin
+  Result := TOptionals.Map(AsOptNull, AFunc);
+end;
+
+function TOptNullGuid.OptNullNormalize(ANormalizer: IPcGuidNormalizer): IOptNullGuid;
+begin
+  Result := TOptionals.Normalize(AsOptNull, ANormalizer);
 end;
 
 end.

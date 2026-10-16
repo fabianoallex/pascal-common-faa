@@ -6,6 +6,31 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-10-16
+
+### Added
+
+- `IPcStringNormalizer` (`function Apply(const AValue: string): string`) and `Normalize`, which
+  is `Map` with that object instead of a function: `TOptionals.Normalize(X, N)` and `X.Normalize(N)`
+  on `IOptString`, `INullString` and `IOptNullString`. It is for a normalization with parameters,
+  which a plain `TPcStringFunc` can't carry without closures (FPC 3.2.2 has none):
+  `LZip := LZip.Trim.Map(OnlyDigits).Normalize(TMaxLength.Create(8))`. The rules are the ones of
+  `Map`: `Apply` runs only for a present value, the state is kept, an unchanged value returns the
+  same instance, and a `nil` normalizer raises `EArgumentException`. The reference count frees an
+  object created in the call, and one instance can be kept and used for many values. The
+  parameter is not `const` on purpose: an object created in the call and passed to a `const`
+  interface parameter gets no reference and is never freed.
+  It isn't a `Map` overload because Delphi rejects an overloaded interface method mapped by a
+  method resolution clause (new gotcha 12), and an overload would make `Map(X, nil)` ambiguous.
+- `Map` and `Normalize` for every other type: Integer, Int64, Single, Double, Currency,
+  TDateTime, Boolean and TGUID, in the three flavors, as methods and in `TOptionals`. Each type
+  has its own function type and normalizer interface (`TPcIntegerFunc`/`IPcIntegerNormalizer`,
+  `TPcDateTimeFunc`/`IPcDateTimeNormalizer`...): one generic version would need generic methods
+  on an interface, which neither compiler allows. The rules are the string ones. Single and
+  Double keep the source's `DecimalPlaces`, except for a result of 0, which is `From`'s shared
+  zero (`DecimalPlaces` -1). Boolean returns the shared `TrueValue`/`FalseValue`. TGUID is
+  compared with `IsEqualGUID`.
+
 ## [1.11.0] - 2026-10-16
 
 ### Added

@@ -229,3 +229,30 @@ console attached. On a console, reading the screen back gave `café €`. The cl
 shows an emoji as U+FFFD, a limit of its screen buffer. A plain `Writeln` in the same program
 keeps the old code page. `PascalCommon.SafeLogTests` sets the captured or file `Output` to 1252
 and checks the bytes, so it fails if the option has no effect.
+
+## 12. Delphi: `E2291 Missing implementation of interface method` with an overloaded method and a method resolution clause
+
+**Symptom.** A class implements an interface whose method is overloaded, and maps it with a
+method resolution clause to overloaded methods of its own. FPC 3.2.2 builds it. Delphi 12
+stops at the class with `E2291 Missing implementation of interface method IOptString.Map`, one
+error per interface. Found in the first version of 1.12.0 (unreleased), where
+`IOptString.Map` had a second overload taking an `IPcStringNormalizer`:
+
+```pascal
+IOptString = interface
+  function Map(AFunc: TPcStringFunc): IOptString; overload;
+  function Map(ANormalizer: IPcStringNormalizer): IOptString; overload;
+end;
+...
+function IOptString.Map = OptMap;   // OptMap is overloaded with both signatures
+```
+
+**Cause.** Delphi binds a method resolution clause to one overload of the interface method, not
+to all of them, and reports the other one as not implemented. `TOptNullString` needs the clause
+because it implements three flavors whose `Map` has the same name and a different result type,
+so the class can't implement them by name.
+
+**Fix.** Don't overload a method of an interface that a class implements through a resolution
+clause; give the new form its own name. 1.12.0 shipped it as `Normalize(ANormalizer)` next to
+`Map(AFunc)`. That also keeps a literal `nil` passed to `Map` unambiguous. The FPC build doesn't
+catch this: build on Delphi before calling an interface change done.

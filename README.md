@@ -30,7 +30,7 @@ as ARM.
 | `PascalCommon.TraceContext` | W3C Trace Context: new trace and span ids (`PcNewTraceId`, `PcNewSpanId`, from the OS random source), validation, and `traceparent`/`tracestate` parse and format (`PcTryParseTraceParent`, `PcFormatTraceParent`, `PcResolveTraceState`) |
 | `PascalCommon.Metrics` | Counter, up-down counter, gauge and histogram with labels, a registry (`PcMetrics` is the process-wide one), and the Prometheus text exposition (`PcPrometheusText`). OpenTelemetry names and units (`http.server.request.duration`, `s`) become Prometheus names (`http_server_request_duration_seconds`); recording is lock-free on a series |
 | `PascalCommon.Tracing` | Spans: `TPcTracing.StartSpan` (a child of the thread's current span), `StartSpanWith`, `StartSpanFromParent` (from a `traceparent` header), `StartDetachedSpan` (never the current span, finished on any thread) with `StartChildSpan` (an explicit parent), attributes and status; parent-based sampling with a ratio; a batch processor that hands finished spans to an `IPcSpanExporter` on its own thread. The exporter (OTLP over HTTP) lives in pascal-api-infra-faa |
-| `PascalCommon.Optionals` | Optional and nullable types: `IOptXxx` ("was it provided?"), `INullXxx` ("is it null?") and `IOptNullXxx` (both), for String, Integer, Int64, Single, Double, Currency, TDateTime, Boolean and TGUID, with `TOptionals.Safe`, and string normalizers that keep the state (`TOptionals.Trim`, `Upper`, `Lower`, `NullIfEmpty`, `UndefinedIfEmpty`, `Map`) |
+| `PascalCommon.Optionals` | Optional and nullable types: `IOptXxx` ("was it provided?"), `INullXxx` ("is it null?") and `IOptNullXxx` (both), for String, Integer, Int64, Single, Double, Currency, TDateTime, Boolean and TGUID, with `TOptionals.Safe`, string normalizers that keep the state (`Trim`, `Upper`, `Lower`, `NullIfEmpty`, `UndefinedIfEmpty`), and `Map`/`Normalize` with your own function or normalizer for every type, all in `TOptionals` and as chainable methods |
 | `PascalCommon.JsonMapper.Optionals` | Optional bridge: a [pascal-jsonmapper-faa](https://github.com/fabianoallex/pascal-jsonmapper-faa) converter for the optional types. Separate package |
 
 ```pascal
@@ -86,6 +86,40 @@ LDto.State    := LDto.State.Trim.Upper;
 LDto.Nickname := LDto.Nickname.Trim.NullIfEmpty;
 LZip          := LDto.Zip.Map(OnlyDigits);
 ```
+
+For a normalization with parameters, which a plain function can't carry, `Normalize` (1.12.0)
+is `Map` with an `IPcStringNormalizer`: a class with an `Apply` method.
+
+```pascal
+type
+  TMaxLength = class(TInterfacedObject, IPcStringNormalizer)
+  private
+    FMax: Integer;
+  public
+    constructor Create(AMax: Integer);
+    function Apply(const AValue: string): string; // Result := Copy(AValue, 1, FMax)
+  end;
+...
+LZip  := LDto.Zip.Trim.Map(OnlyDigits).Normalize(TMaxLength.Create(8));
+LName := TOptionals.Normalize(LDto.Name, TMaxLength.Create(60));
+```
+
+The reference count frees the object, so there is no `try/finally`. One instance can also be
+kept in a variable and used for many fields.
+
+`Map` and `Normalize` exist for every type, not only string (1.12.0). Each type has its own
+function type and normalizer interface: `TPcIntegerFunc`/`IPcIntegerNormalizer`, and likewise
+for Int64, Single, Double, Currency, DateTime, Boolean and Guid.
+
+```pascal
+function RoundCents(const AValue: Currency): Currency;
+...
+LPrice    := LDto.Price.Map(RoundCents);
+LDeadline := LDto.Deadline.Normalize(TAddBusinessDays.Create(3)); // your IPcDateTimeNormalizer
+```
+
+Single and Double keep the source's `DecimalPlaces`, except for a result of 0: `From` returns
+its shared zero, whose `DecimalPlaces` is -1.
 
 A method can't be called on `nil`. Where the field may be `nil`, start the chain with `Safe`
 (`TOptionals.Safe(LDto.State).Trim.Upper`), or use the `TOptionals` form, which reads `nil` as
