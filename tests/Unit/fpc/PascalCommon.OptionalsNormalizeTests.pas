@@ -14,6 +14,11 @@
   TOptNullString.Undefined held by an INullString), which must come back
   unchanged instead of becoming ''.
 
+  The Fluent_* tests cover the same normalizers as methods of the string
+  flavors (X.Trim.Upper, 1.11.0): the same rules in every state, chains,
+  the hidden states, the same instance for an unchanged value, and
+  TOptionals.Safe(X) as the start of a chain when X is nil.
+
   Each result is reduced to a text (Describe*: 'nil', 'undefined', 'null' or
   'value:<text>'), so a failure shows the state it got. Upper/Lower are
   checked with 'são paulo' on every platform: they must not depend on the
@@ -59,6 +64,16 @@ type
     procedure Map_Null_KeepsStateAndAppliesFunction;
     procedure Map_OptNull_KeepsStateAndAppliesFunction;
     procedure Map_NilFunction_RaisesEArgumentException;
+    procedure Fluent_Opt_KeepsStateAndTransformsValue;
+    procedure Fluent_Null_KeepsStateAndTransformsValue;
+    procedure Fluent_OptNull_KeepsStateAndTransformsValue;
+    procedure Fluent_HiddenStates_AreKept;
+    procedure Fluent_Chain_TrimUpper;
+    procedure Fluent_Chain_BlankBecomesNullOrUndefined;
+    procedure Fluent_AssignToItself;
+    procedure Fluent_UnchangedValue_ReturnsSameInstance;
+    procedure Fluent_SafeOfNil_StartsAChain;
+    procedure Fluent_MapNilFunction_RaisesEArgumentException;
   end;
 
 implementation
@@ -374,6 +389,131 @@ begin
   LRaised := False;
   try
     TOptionals.Map(OptUndefined, nil);
+  except
+    on E: EArgumentException do
+      LRaised := True;
+  end;
+  TAssert.AssertTrue('even with no value to transform', LRaised);
+end;
+
+procedure TOptionalNormalizeTests.Fluent_Opt_KeepsStateAndTransformsValue;
+begin
+  TAssert.AssertEquals('trim undefined', 'undefined', DescribeOpt(OptUndefined.Trim));
+  TAssert.AssertEquals('trim', 'value:a b', DescribeOpt(OptOf(' a b ').Trim));
+  TAssert.AssertEquals('upper undefined', 'undefined', DescribeOpt(OptUndefined.Upper));
+  TAssert.AssertEquals('upper', 'value:SÃO PAULO', DescribeOpt(OptOf('são paulo').Upper));
+  TAssert.AssertEquals('lower undefined', 'undefined', DescribeOpt(OptUndefined.Lower));
+  TAssert.AssertEquals('lower', 'value:são paulo', DescribeOpt(OptOf('SÃO PAULO').Lower));
+  TAssert.AssertEquals('undefinedifempty empty', 'undefined', DescribeOpt(OptOf('').UndefinedIfEmpty));
+  TAssert.AssertEquals('undefinedifempty value', 'value:a', DescribeOpt(OptOf('a').UndefinedIfEmpty));
+  TAssert.AssertEquals('map undefined', 'undefined', DescribeOpt(OptUndefined.Map(OnlyDigits)));
+  TAssert.AssertEquals('map', 'value:89010000', DescribeOpt(OptOf('89.010-000').Map(OnlyDigits)));
+end;
+
+procedure TOptionalNormalizeTests.Fluent_Null_KeepsStateAndTransformsValue;
+begin
+  TAssert.AssertEquals('trim null', 'null', DescribeNull(NullNull.Trim));
+  TAssert.AssertEquals('trim', 'value:a b', DescribeNull(NullOf(' a b ').Trim));
+  TAssert.AssertEquals('upper null', 'null', DescribeNull(NullNull.Upper));
+  TAssert.AssertEquals('upper', 'value:SÃO PAULO', DescribeNull(NullOf('são paulo').Upper));
+  TAssert.AssertEquals('lower null', 'null', DescribeNull(NullNull.Lower));
+  TAssert.AssertEquals('lower', 'value:são paulo', DescribeNull(NullOf('SÃO PAULO').Lower));
+  TAssert.AssertEquals('nullifempty empty', 'null', DescribeNull(NullOf('').NullIfEmpty));
+  TAssert.AssertEquals('nullifempty value', 'value:a', DescribeNull(NullOf('a').NullIfEmpty));
+  TAssert.AssertEquals('map null', 'null', DescribeNull(NullNull.Map(OnlyDigits)));
+  TAssert.AssertEquals('map', 'value:89010000', DescribeNull(NullOf('89.010-000').Map(OnlyDigits)));
+end;
+
+procedure TOptionalNormalizeTests.Fluent_OptNull_KeepsStateAndTransformsValue;
+begin
+  TAssert.AssertEquals('trim undefined', 'undefined', DescribeOptNull(OptNullUndefined.Trim));
+  TAssert.AssertEquals('trim null', 'null', DescribeOptNull(OptNullNull.Trim));
+  TAssert.AssertEquals('trim', 'value:a b', DescribeOptNull(OptNullOf(' a b ').Trim));
+  TAssert.AssertEquals('upper', 'value:SÃO PAULO', DescribeOptNull(OptNullOf('são paulo').Upper));
+  TAssert.AssertEquals('lower', 'value:são paulo', DescribeOptNull(OptNullOf('SÃO PAULO').Lower));
+  TAssert.AssertEquals('nullifempty empty', 'null', DescribeOptNull(OptNullOf('').NullIfEmpty));
+  TAssert.AssertEquals('nullifempty undefined', 'undefined', DescribeOptNull(OptNullUndefined.NullIfEmpty));
+  TAssert.AssertEquals('undefinedifempty empty', 'undefined', DescribeOptNull(OptNullOf('').UndefinedIfEmpty));
+  TAssert.AssertEquals('undefinedifempty null', 'null', DescribeOptNull(OptNullNull.UndefinedIfEmpty));
+  TAssert.AssertEquals('map null', 'null', DescribeOptNull(OptNullNull.Map(OnlyDigits)));
+  TAssert.AssertEquals('map', 'value:89010000', DescribeOptNull(OptNullOf('89.010-000').Map(OnlyDigits)));
+end;
+
+procedure TOptionalNormalizeTests.Fluent_HiddenStates_AreKept;
+begin
+  TAssert.AssertEquals('opt hidden null trim', 'null', DescribeOpt(OptHiddenNull.Trim));
+  TAssert.AssertEquals('opt hidden null upper', 'null', DescribeOpt(OptHiddenNull.Upper));
+  TAssert.AssertEquals('opt hidden null undefinedifempty', 'null', DescribeOpt(OptHiddenNull.UndefinedIfEmpty));
+  TAssert.AssertEquals('opt hidden null map', 'null', DescribeOpt(OptHiddenNull.Map(OnlyDigits)));
+  TAssert.AssertEquals('null hidden undefined trim', 'undefined', DescribeNull(NullHiddenUndefined.Trim));
+  TAssert.AssertEquals('null hidden undefined lower', 'undefined', DescribeNull(NullHiddenUndefined.Lower));
+  TAssert.AssertEquals('null hidden undefined nullifempty', 'undefined', DescribeNull(NullHiddenUndefined.NullIfEmpty));
+  TAssert.AssertEquals('null hidden undefined map', 'undefined', DescribeNull(NullHiddenUndefined.Map(OnlyDigits)));
+end;
+
+procedure TOptionalNormalizeTests.Fluent_Chain_TrimUpper;
+begin
+  TAssert.AssertEquals('opt', 'value:SÃO PAULO', DescribeOpt(OptOf('  são paulo ').Trim.Upper));
+  TAssert.AssertEquals('null', 'value:SÃO PAULO', DescribeNull(NullOf('  são paulo ').Trim.Upper));
+  TAssert.AssertEquals('optnull', 'value:SÃO PAULO', DescribeOptNull(OptNullOf('  são paulo ').Trim.Upper));
+  TAssert.AssertEquals('undefined', 'undefined', DescribeOpt(OptUndefined.Trim.Upper));
+  TAssert.AssertEquals('null state', 'null', DescribeOptNull(OptNullNull.Trim.Upper.Lower));
+end;
+
+procedure TOptionalNormalizeTests.Fluent_Chain_BlankBecomesNullOrUndefined;
+begin
+  TAssert.AssertEquals('null', 'null', DescribeNull(NullOf('   ').Trim.NullIfEmpty));
+  TAssert.AssertEquals('optnull null', 'null', DescribeOptNull(OptNullOf('   ').Trim.NullIfEmpty));
+  TAssert.AssertEquals('opt', 'undefined', DescribeOpt(OptOf('   ').Trim.UndefinedIfEmpty));
+  TAssert.AssertEquals('optnull undefined', 'undefined', DescribeOptNull(OptNullOf('   ').Trim.UndefinedIfEmpty));
+  TAssert.AssertEquals('value', 'value:a', DescribeOpt(OptOf(' a ').Trim.UndefinedIfEmpty));
+end;
+
+procedure TOptionalNormalizeTests.Fluent_AssignToItself;
+var
+  LOpt: IOptString;
+  LNull: INullString;
+  LOptNull: IOptNullString;
+begin
+  LOpt := OptOf(' sp ');
+  LOpt := LOpt.Trim.Upper;
+  LNull := NullOf(' sp ');
+  LNull := LNull.Trim.Upper;
+  LOptNull := OptNullOf('   ');
+  LOptNull := LOptNull.Trim.NullIfEmpty;
+  TAssert.AssertEquals('opt', 'value:SP', DescribeOpt(LOpt));
+  TAssert.AssertEquals('null', 'value:SP', DescribeNull(LNull));
+  TAssert.AssertEquals('optnull', 'null', DescribeOptNull(LOptNull));
+end;
+
+procedure TOptionalNormalizeTests.Fluent_UnchangedValue_ReturnsSameInstance;
+var
+  LOpt: IOptString;
+  LNull: INullString;
+  LOptNull: IOptNullString;
+begin
+  LOpt := OptOf('ALREADY');
+  LNull := NullOf('ALREADY');
+  LOptNull := OptNullOf('ALREADY');
+  TAssert.AssertTrue('IOptString', LOpt.Trim.Upper = LOpt);
+  TAssert.AssertTrue('INullString', LNull.Trim.Upper = LNull);
+  TAssert.AssertTrue('IOptNullString', LOptNull.Trim.Upper = LOptNull);
+end;
+
+procedure TOptionalNormalizeTests.Fluent_SafeOfNil_StartsAChain;
+begin
+  TAssert.AssertEquals('opt', 'undefined', DescribeOpt(TOptionals.Safe(IOptString(nil)).Trim.Upper));
+  TAssert.AssertEquals('null', 'null', DescribeNull(TOptionals.Safe(INullString(nil)).Trim.Upper));
+  TAssert.AssertEquals('optnull', 'undefined', DescribeOptNull(TOptionals.Safe(IOptNullString(nil)).Trim.Upper));
+end;
+
+procedure TOptionalNormalizeTests.Fluent_MapNilFunction_RaisesEArgumentException;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    OptNullUndefined.Map(nil);
   except
     on E: EArgumentException do
       LRaised := True;

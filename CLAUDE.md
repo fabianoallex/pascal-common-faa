@@ -57,6 +57,10 @@ has the optionals bridge to it.
   ```
 
   (measured on FPC 3.2.2: a constant from another unit is evaluated in `$IF`.)
+- **The optional interfaces (`IOptString`, `INullXxx`...) are implemented only by the
+  `TOptNullXxx` classes here**, never outside (stated in the README since 1.11.0). So a minor
+  version may add methods to them, as 1.11.0 did with the fluent string normalizers. Any other
+  public interface stays frozen within a major version.
 - **A consumer never ships this library inside itself.** It may have it as a submodule in
   `external/` for its own tests and CI; the application provides the one copy (one registered
   `pascal_common_faa.lpk`, or one search path in Delphi).

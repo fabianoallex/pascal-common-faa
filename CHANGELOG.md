@@ -6,6 +6,28 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-16
+
+### Added
+
+- The string normalizers as methods of the string optionals, so they chain:
+  `LDto.State := LDto.State.Trim.Upper`. `IOptString` has `Trim`, `Upper`, `Lower`,
+  `UndefinedIfEmpty` and `Map(AFunc)`; `INullString` has `Trim`, `Upper`, `Lower`,
+  `NullIfEmpty` and `Map(AFunc)`; `IOptNullString` has all six. Each returns its own flavor and
+  calls the `TOptionals` method of the same name with `Self`, so the rules are the same: the
+  state is kept, an unchanged value returns the same instance, and the hidden states (Null held
+  by an `IOptString`, Undefined held by an `INullString`) come back unchanged.
+  One difference: a method can't be called on `nil`. Where the variable may be `nil`, start the
+  chain with `TOptionals.Safe(X)` or use the `TOptionals` form, which reads `nil` as `Safe` does.
+- `IOptString`, `INullString` and `IOptNullString` are implemented only by `TOptNullString` and
+  aren't meant to be implemented outside the library. That is what lets this minor version add
+  methods to them. No class outside `PascalCommon.Optionals` implemented them.
+
+### Changed
+
+- `TPcStringFunc` is now declared before the optional interfaces (the fluent `Map` takes it).
+  Same unit, same declaration.
+
 ## [1.10.0] - 2026-10-15
 
 ### Added

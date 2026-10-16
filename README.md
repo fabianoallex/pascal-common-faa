@@ -78,6 +78,21 @@ function OnlyDigits(const AValue: string): string;
 LZip := TOptionals.Map(LDto.Zip, OnlyDigits);
 ```
 
+The same normalizers are methods of the string optionals (1.11.0), so they chain. Each one
+calls the `TOptionals` method of the same name, with the same rules:
+
+```pascal
+LDto.State    := LDto.State.Trim.Upper;
+LDto.Nickname := LDto.Nickname.Trim.NullIfEmpty;
+LZip          := LDto.Zip.Map(OnlyDigits);
+```
+
+A method can't be called on `nil`. Where the field may be `nil`, start the chain with `Safe`
+(`TOptionals.Safe(LDto.State).Trim.Upper`), or use the `TOptionals` form, which reads `nil` as
+`Safe` does. `IOptString`, `INullString` and `IOptNullString` are implemented only by
+`TOptNullString`. Don't implement them in your own classes: a minor version may add methods to
+them.
+
 Only the string optionals have normalizers. The other types get theirs when a consumer needs
 them.
 

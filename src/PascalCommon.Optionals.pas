@@ -29,6 +29,14 @@
   fail to build on FPC; SysUtils.Trim is overloaded, which is one reason the
   common normalizers are named methods here.
 
+  The string flavors also have them as methods (1.11.0), for a chain:
+  LDto.State.Trim.Upper. Each method calls the TOptionals one with Self, so
+  the rules are the same; the one difference is nil, which TOptionals reads
+  as in Safe and a method call can't survive. TOptNullString implements the
+  three flavors, whose methods share names but not result types, so it maps
+  each one with a method resolution clause (function IOptString.Trim =
+  OptTrim), which Delphi and FPC in mode Delphi both accept.
+
   Dual-compiler: the cache-key comparers for Single/Double are named
   functions (TEqualityComparer<T>.Construct doesn't accept a closure on FPC
   3.2.2, and the IEqualityComparer<T> signature differs — constref/UInt32 on
@@ -42,6 +50,13 @@ uses
   PascalCommon.ClockCache, Generics.Defaults;
 
 type
+  /// A string transformation for TOptionals.Map and the fluent Map of the
+  /// string flavors. A plain function pointer, not PASCALCOMMON_FUNCREFS:
+  /// "of object" on FPC would refuse the plain function a Delphi caller
+  /// passes to a "reference to", so code written on one compiler wouldn't
+  /// build on the other.
+  TPcStringFunc = function(const AValue: string): string;
+
   IOptionalBase = interface
     ['{E4F4A971-9D82-4072-9FCD-B94B3534D00B}']
     function HasValue: Boolean;
@@ -78,16 +93,39 @@ type
 
   { string interfaces }
 
+  // The fluent normalizers (1.11.0) are the TOptionals ones of the same
+  // name applied to Self: X.Trim.Upper = TOptionals.Upper(TOptionals.Trim(X)).
+  // A method can't be called on nil: where X may be nil, start the chain
+  // with TOptionals.Safe(X). These interfaces are implemented only by
+  // TOptNullString; they aren't meant to be implemented outside this unit,
+  // which is what lets a minor version add methods to them.
+
   IOptString = interface(IOptional<string>)
     ['{A761330C-AA4B-44A5-A617-C79E3F745A23}']
+    function Trim: IOptString;
+    function Upper: IOptString;
+    function Lower: IOptString;
+    function UndefinedIfEmpty: IOptString;
+    function Map(AFunc: TPcStringFunc): IOptString;
   end;
 
   INullString = interface(INullable<string>)
     ['{C86A1566-0B19-4BE2-B780-D22C3ED385F6}']
+    function Trim: INullString;
+    function Upper: INullString;
+    function Lower: INullString;
+    function NullIfEmpty: INullString;
+    function Map(AFunc: TPcStringFunc): INullString;
   end;
 
   IOptNullString = interface(IOptionalNullable<string>)
     ['{E166D638-8A7C-4143-A0EE-22161499F6A8}']
+    function Trim: IOptNullString;
+    function Upper: IOptNullString;
+    function Lower: IOptNullString;
+    function NullIfEmpty: IOptNullString;
+    function UndefinedIfEmpty: IOptNullString;
+    function Map(AFunc: TPcStringFunc): IOptNullString;
   end;
 
   { Integers interfaces }
@@ -220,12 +258,6 @@ type
     property DecimalPlaces: Integer read GetDecimalPlaces;
   end;
 
-  /// A string transformation for TOptionals.Map. A plain function pointer,
-  /// not PASCALCOMMON_FUNCREFS: "of object" on FPC would refuse the plain
-  /// function a Delphi caller passes to a "reference to", so code written on
-  /// one compiler wouldn't build on the other.
-  TPcStringFunc = function(const AValue: string): string;
-
   { TOptionals Helper }
 
   TOptionals = class
@@ -338,6 +370,46 @@ type
     class var FGlobalEmpty: IOptNullString;
     class var FGlobalCache: TCache;
     class var FLockCache: TCriticalSection;
+  private
+    // The fluent normalizers. The three flavors declare methods with the
+    // same names and different result types, so each one is mapped to its
+    // own method. They are private on purpose: reached only through an
+    // interface, the object always has a reference while they run.
+    function IOptString.Trim = OptTrim;
+    function IOptString.Upper = OptUpper;
+    function IOptString.Lower = OptLower;
+    function IOptString.UndefinedIfEmpty = OptUndefinedIfEmpty;
+    function IOptString.Map = OptMap;
+    function INullString.Trim = NullTrim;
+    function INullString.Upper = NullUpper;
+    function INullString.Lower = NullLower;
+    function INullString.NullIfEmpty = NullNullIfEmpty;
+    function INullString.Map = NullMap;
+    function IOptNullString.Trim = OptNullTrim;
+    function IOptNullString.Upper = OptNullUpper;
+    function IOptNullString.Lower = OptNullLower;
+    function IOptNullString.NullIfEmpty = OptNullNullIfEmpty;
+    function IOptNullString.UndefinedIfEmpty = OptNullUndefinedIfEmpty;
+    function IOptNullString.Map = OptNullMap;
+    function AsOpt: IOptString;
+    function AsNull: INullString;
+    function AsOptNull: IOptNullString;
+    function OptTrim: IOptString;
+    function OptUpper: IOptString;
+    function OptLower: IOptString;
+    function OptUndefinedIfEmpty: IOptString;
+    function OptMap(AFunc: TPcStringFunc): IOptString;
+    function NullTrim: INullString;
+    function NullUpper: INullString;
+    function NullLower: INullString;
+    function NullNullIfEmpty: INullString;
+    function NullMap(AFunc: TPcStringFunc): INullString;
+    function OptNullTrim: IOptNullString;
+    function OptNullUpper: IOptNullString;
+    function OptNullLower: IOptNullString;
+    function OptNullNullIfEmpty: IOptNullString;
+    function OptNullUndefinedIfEmpty: IOptNullString;
+    function OptNullMap(AFunc: TPcStringFunc): IOptNullString;
   public
     class constructor Create;
     class destructor Destroy;
@@ -1093,6 +1165,105 @@ begin
   end;
 
   Result := Obj as TOptNullString;
+end;
+
+{ TOptNullString: fluent normalizers. Self goes to an interface through a
+  plain assignment (the same on both compilers) and then to the TOptionals
+  method of the same name, so both forms share one implementation. }
+
+function TOptNullString.AsOpt: IOptString;
+begin
+  Result := Self;
+end;
+
+function TOptNullString.AsNull: INullString;
+begin
+  Result := Self;
+end;
+
+function TOptNullString.AsOptNull: IOptNullString;
+begin
+  Result := Self;
+end;
+
+function TOptNullString.OptTrim: IOptString;
+begin
+  Result := TOptionals.Trim(AsOpt);
+end;
+
+function TOptNullString.OptUpper: IOptString;
+begin
+  Result := TOptionals.Upper(AsOpt);
+end;
+
+function TOptNullString.OptLower: IOptString;
+begin
+  Result := TOptionals.Lower(AsOpt);
+end;
+
+function TOptNullString.OptUndefinedIfEmpty: IOptString;
+begin
+  Result := TOptionals.UndefinedIfEmpty(AsOpt);
+end;
+
+function TOptNullString.OptMap(AFunc: TPcStringFunc): IOptString;
+begin
+  Result := TOptionals.Map(AsOpt, AFunc);
+end;
+
+function TOptNullString.NullTrim: INullString;
+begin
+  Result := TOptionals.Trim(AsNull);
+end;
+
+function TOptNullString.NullUpper: INullString;
+begin
+  Result := TOptionals.Upper(AsNull);
+end;
+
+function TOptNullString.NullLower: INullString;
+begin
+  Result := TOptionals.Lower(AsNull);
+end;
+
+function TOptNullString.NullNullIfEmpty: INullString;
+begin
+  Result := TOptionals.NullIfEmpty(AsNull);
+end;
+
+function TOptNullString.NullMap(AFunc: TPcStringFunc): INullString;
+begin
+  Result := TOptionals.Map(AsNull, AFunc);
+end;
+
+function TOptNullString.OptNullTrim: IOptNullString;
+begin
+  Result := TOptionals.Trim(AsOptNull);
+end;
+
+function TOptNullString.OptNullUpper: IOptNullString;
+begin
+  Result := TOptionals.Upper(AsOptNull);
+end;
+
+function TOptNullString.OptNullLower: IOptNullString;
+begin
+  Result := TOptionals.Lower(AsOptNull);
+end;
+
+function TOptNullString.OptNullNullIfEmpty: IOptNullString;
+begin
+  Result := TOptionals.NullIfEmpty(AsOptNull);
+end;
+
+function TOptNullString.OptNullUndefinedIfEmpty: IOptNullString;
+begin
+  Result := TOptionals.UndefinedIfEmpty(AsOptNull);
+end;
+
+function TOptNullString.OptNullMap(AFunc: TPcStringFunc): IOptNullString;
+begin
+  Result := TOptionals.Map(AsOptNull, AFunc);
 end;
 
 { TOptNullInteger }
