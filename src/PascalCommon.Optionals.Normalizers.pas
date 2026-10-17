@@ -1,0 +1,776 @@
+﻿unit PascalCommon.Optionals.Normalizers;
+
+{$I pascalcommon.inc}
+
+{ Normalizers ready to pass to Normalize, gathered in one factory class per
+  type (TPcStringNormalizers, TPcIntegerNormalizers...), so the editor's
+  completion lists them under one name.
+
+  An application inherits a factory and adds its own normalizers as class
+  functions; its normalizers and the library's then show up under one name,
+  and the classes behind them stay in the application's implementation
+  section (README, "One place for your normalizers"):
+
+    TNorm = class(TPcStringNormalizers)
+    public
+      class function Cep: IPcStringNormalizer; static;
+    end;
+    ...
+    Result := Chain([Trim, FromFunc(OnlyDigits), MaxLength(8)]);
+
+  Inheritance rather than a class helper: Delphi and FPC 3.2 see one helper
+  per type, so two units with helpers for the same class would hide each
+  other. A library on top of this one can have its own factory that
+  inherits this one, and the application can inherit that library's.
+
+  What belongs here: generic transformations only (case, blanks, length,
+  digits, rounding, a date without its time), and only once a second library
+  or a measured case asks for one, as everything in pascal-common-faa.
+  Business rules (a CEP, a CPF, a phone number) belong in the application's
+  factory. Today every factory has FromFunc and Chain, and the string one
+  also has Trim, Upper and Lower.
+
+  The interfaces (IPcXxxNormalizer) and function types (TPcXxxFunc) stay in
+  PascalCommon.Optionals, because the Map and Normalize methods need them.
+  The per-type code is written from one template (FPC 3.2.2 has no generic
+  methods on interfaces, and a generic class can't implement an interface
+  chosen by a type parameter); keep the types alike. Chain copies the open
+  array into its own dynamic array, which takes the references the chain
+  lives on, so Chain([TX.Create(...)]) frees TX with the chain. }
+
+interface
+
+uses
+  SysUtils, PascalCommon.Optionals;
+
+type
+  TPcStringNormalizers = class
+  strict private
+    class var FTrim: IPcStringNormalizer;
+    class var FUpper: IPcStringNormalizer;
+    class var FLower: IPcStringNormalizer;
+  public
+    class constructor Create;
+    class destructor Destroy;
+    /// The same transformations as TOptionals.Trim/Upper/Lower: shared
+    /// instances, created when the unit starts; they hold no state.
+    class function Trim: IPcStringNormalizer; static;
+    class function Upper: IPcStringNormalizer; static;
+    class function Lower: IPcStringNormalizer; static;
+    /// A plain function as a normalizer. AFunc = nil raises EArgumentException.
+    class function FromFunc(AFunc: TPcStringFunc): IPcStringNormalizer; static;
+    /// The normalizers applied in order, as one. An empty list returns the
+    /// value unchanged; a nil item raises EArgumentException.
+    class function Chain(const ANormalizers: array of IPcStringNormalizer): IPcStringNormalizer; static;
+  end;
+
+  TPcIntegerNormalizers = class
+  public
+    /// A plain function as a normalizer. AFunc = nil raises EArgumentException.
+    class function FromFunc(AFunc: TPcIntegerFunc): IPcIntegerNormalizer; static;
+    /// The normalizers applied in order, as one. An empty list returns the
+    /// value unchanged; a nil item raises EArgumentException.
+    class function Chain(const ANormalizers: array of IPcIntegerNormalizer): IPcIntegerNormalizer; static;
+  end;
+
+  TPcInt64Normalizers = class
+  public
+    /// A plain function as a normalizer. AFunc = nil raises EArgumentException.
+    class function FromFunc(AFunc: TPcInt64Func): IPcInt64Normalizer; static;
+    /// The normalizers applied in order, as one. An empty list returns the
+    /// value unchanged; a nil item raises EArgumentException.
+    class function Chain(const ANormalizers: array of IPcInt64Normalizer): IPcInt64Normalizer; static;
+  end;
+
+  TPcSingleNormalizers = class
+  public
+    /// A plain function as a normalizer. AFunc = nil raises EArgumentException.
+    class function FromFunc(AFunc: TPcSingleFunc): IPcSingleNormalizer; static;
+    /// The normalizers applied in order, as one. An empty list returns the
+    /// value unchanged; a nil item raises EArgumentException.
+    class function Chain(const ANormalizers: array of IPcSingleNormalizer): IPcSingleNormalizer; static;
+  end;
+
+  TPcDoubleNormalizers = class
+  public
+    /// A plain function as a normalizer. AFunc = nil raises EArgumentException.
+    class function FromFunc(AFunc: TPcDoubleFunc): IPcDoubleNormalizer; static;
+    /// The normalizers applied in order, as one. An empty list returns the
+    /// value unchanged; a nil item raises EArgumentException.
+    class function Chain(const ANormalizers: array of IPcDoubleNormalizer): IPcDoubleNormalizer; static;
+  end;
+
+  TPcCurrencyNormalizers = class
+  public
+    /// A plain function as a normalizer. AFunc = nil raises EArgumentException.
+    class function FromFunc(AFunc: TPcCurrencyFunc): IPcCurrencyNormalizer; static;
+    /// The normalizers applied in order, as one. An empty list returns the
+    /// value unchanged; a nil item raises EArgumentException.
+    class function Chain(const ANormalizers: array of IPcCurrencyNormalizer): IPcCurrencyNormalizer; static;
+  end;
+
+  TPcDateTimeNormalizers = class
+  public
+    /// A plain function as a normalizer. AFunc = nil raises EArgumentException.
+    class function FromFunc(AFunc: TPcDateTimeFunc): IPcDateTimeNormalizer; static;
+    /// The normalizers applied in order, as one. An empty list returns the
+    /// value unchanged; a nil item raises EArgumentException.
+    class function Chain(const ANormalizers: array of IPcDateTimeNormalizer): IPcDateTimeNormalizer; static;
+  end;
+
+  TPcBooleanNormalizers = class
+  public
+    /// A plain function as a normalizer. AFunc = nil raises EArgumentException.
+    class function FromFunc(AFunc: TPcBooleanFunc): IPcBooleanNormalizer; static;
+    /// The normalizers applied in order, as one. An empty list returns the
+    /// value unchanged; a nil item raises EArgumentException.
+    class function Chain(const ANormalizers: array of IPcBooleanNormalizer): IPcBooleanNormalizer; static;
+  end;
+
+  TPcGuidNormalizers = class
+  public
+    /// A plain function as a normalizer. AFunc = nil raises EArgumentException.
+    class function FromFunc(AFunc: TPcGuidFunc): IPcGuidNormalizer; static;
+    /// The normalizers applied in order, as one. An empty list returns the
+    /// value unchanged; a nil item raises EArgumentException.
+    class function Chain(const ANormalizers: array of IPcGuidNormalizer): IPcGuidNormalizer; static;
+  end;
+
+implementation
+
+uses
+  PascalCommon.Text;
+
+{ The objects behind FromFunc and Chain, one pair per type. }
+
+type
+  TStringFuncNormalizer = class(TInterfacedObject, IPcStringNormalizer)
+  private
+    FFunc: TPcStringFunc;
+  public
+    constructor Create(AFunc: TPcStringFunc);
+    function Apply(const AValue: string): string;
+  end;
+
+  TStringChainNormalizer = class(TInterfacedObject, IPcStringNormalizer)
+  private
+    FItems: array of IPcStringNormalizer;
+  public
+    constructor Create(const ANormalizers: array of IPcStringNormalizer);
+    function Apply(const AValue: string): string;
+  end;
+
+  TIntegerFuncNormalizer = class(TInterfacedObject, IPcIntegerNormalizer)
+  private
+    FFunc: TPcIntegerFunc;
+  public
+    constructor Create(AFunc: TPcIntegerFunc);
+    function Apply(const AValue: Integer): Integer;
+  end;
+
+  TIntegerChainNormalizer = class(TInterfacedObject, IPcIntegerNormalizer)
+  private
+    FItems: array of IPcIntegerNormalizer;
+  public
+    constructor Create(const ANormalizers: array of IPcIntegerNormalizer);
+    function Apply(const AValue: Integer): Integer;
+  end;
+
+  TInt64FuncNormalizer = class(TInterfacedObject, IPcInt64Normalizer)
+  private
+    FFunc: TPcInt64Func;
+  public
+    constructor Create(AFunc: TPcInt64Func);
+    function Apply(const AValue: Int64): Int64;
+  end;
+
+  TInt64ChainNormalizer = class(TInterfacedObject, IPcInt64Normalizer)
+  private
+    FItems: array of IPcInt64Normalizer;
+  public
+    constructor Create(const ANormalizers: array of IPcInt64Normalizer);
+    function Apply(const AValue: Int64): Int64;
+  end;
+
+  TSingleFuncNormalizer = class(TInterfacedObject, IPcSingleNormalizer)
+  private
+    FFunc: TPcSingleFunc;
+  public
+    constructor Create(AFunc: TPcSingleFunc);
+    function Apply(const AValue: Single): Single;
+  end;
+
+  TSingleChainNormalizer = class(TInterfacedObject, IPcSingleNormalizer)
+  private
+    FItems: array of IPcSingleNormalizer;
+  public
+    constructor Create(const ANormalizers: array of IPcSingleNormalizer);
+    function Apply(const AValue: Single): Single;
+  end;
+
+  TDoubleFuncNormalizer = class(TInterfacedObject, IPcDoubleNormalizer)
+  private
+    FFunc: TPcDoubleFunc;
+  public
+    constructor Create(AFunc: TPcDoubleFunc);
+    function Apply(const AValue: Double): Double;
+  end;
+
+  TDoubleChainNormalizer = class(TInterfacedObject, IPcDoubleNormalizer)
+  private
+    FItems: array of IPcDoubleNormalizer;
+  public
+    constructor Create(const ANormalizers: array of IPcDoubleNormalizer);
+    function Apply(const AValue: Double): Double;
+  end;
+
+  TCurrencyFuncNormalizer = class(TInterfacedObject, IPcCurrencyNormalizer)
+  private
+    FFunc: TPcCurrencyFunc;
+  public
+    constructor Create(AFunc: TPcCurrencyFunc);
+    function Apply(const AValue: Currency): Currency;
+  end;
+
+  TCurrencyChainNormalizer = class(TInterfacedObject, IPcCurrencyNormalizer)
+  private
+    FItems: array of IPcCurrencyNormalizer;
+  public
+    constructor Create(const ANormalizers: array of IPcCurrencyNormalizer);
+    function Apply(const AValue: Currency): Currency;
+  end;
+
+  TDateTimeFuncNormalizer = class(TInterfacedObject, IPcDateTimeNormalizer)
+  private
+    FFunc: TPcDateTimeFunc;
+  public
+    constructor Create(AFunc: TPcDateTimeFunc);
+    function Apply(const AValue: TDateTime): TDateTime;
+  end;
+
+  TDateTimeChainNormalizer = class(TInterfacedObject, IPcDateTimeNormalizer)
+  private
+    FItems: array of IPcDateTimeNormalizer;
+  public
+    constructor Create(const ANormalizers: array of IPcDateTimeNormalizer);
+    function Apply(const AValue: TDateTime): TDateTime;
+  end;
+
+  TBooleanFuncNormalizer = class(TInterfacedObject, IPcBooleanNormalizer)
+  private
+    FFunc: TPcBooleanFunc;
+  public
+    constructor Create(AFunc: TPcBooleanFunc);
+    function Apply(const AValue: Boolean): Boolean;
+  end;
+
+  TBooleanChainNormalizer = class(TInterfacedObject, IPcBooleanNormalizer)
+  private
+    FItems: array of IPcBooleanNormalizer;
+  public
+    constructor Create(const ANormalizers: array of IPcBooleanNormalizer);
+    function Apply(const AValue: Boolean): Boolean;
+  end;
+
+  TGuidFuncNormalizer = class(TInterfacedObject, IPcGuidNormalizer)
+  private
+    FFunc: TPcGuidFunc;
+  public
+    constructor Create(AFunc: TPcGuidFunc);
+    function Apply(const AValue: TGUID): TGUID;
+  end;
+
+  TGuidChainNormalizer = class(TInterfacedObject, IPcGuidNormalizer)
+  private
+    FItems: array of IPcGuidNormalizer;
+  public
+    constructor Create(const ANormalizers: array of IPcGuidNormalizer);
+    function Apply(const AValue: TGUID): TGUID;
+  end;
+
+function NormTrim(const AValue: string): string;
+begin
+  Result := SysUtils.Trim(AValue);
+end;
+
+function NormUpper(const AValue: string): string;
+begin
+  Result := PcUpperCase(AValue);
+end;
+
+function NormLower(const AValue: string): string;
+begin
+  Result := PcLowerCase(AValue);
+end;
+
+{ String }
+
+constructor TStringFuncNormalizer.Create(AFunc: TPcStringFunc);
+begin
+  inherited Create;
+  FFunc := AFunc;
+end;
+
+function TStringFuncNormalizer.Apply(const AValue: string): string;
+begin
+  Result := FFunc(AValue);
+end;
+
+constructor TStringChainNormalizer.Create(const ANormalizers: array of IPcStringNormalizer);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FItems, Length(ANormalizers));
+  for I := 0 to High(ANormalizers) do
+    FItems[I] := ANormalizers[I];
+end;
+
+function TStringChainNormalizer.Apply(const AValue: string): string;
+var
+  I: Integer;
+begin
+  Result := AValue;
+  for I := 0 to High(FItems) do
+    Result := FItems[I].Apply(Result);
+end;
+
+class constructor TPcStringNormalizers.Create;
+begin
+  FTrim := TStringFuncNormalizer.Create(NormTrim);
+  FUpper := TStringFuncNormalizer.Create(NormUpper);
+  FLower := TStringFuncNormalizer.Create(NormLower);
+end;
+
+class destructor TPcStringNormalizers.Destroy;
+begin
+  FTrim := nil;
+  FUpper := nil;
+  FLower := nil;
+end;
+
+class function TPcStringNormalizers.Trim: IPcStringNormalizer;
+begin
+  Result := FTrim;
+end;
+
+class function TPcStringNormalizers.Upper: IPcStringNormalizer;
+begin
+  Result := FUpper;
+end;
+
+class function TPcStringNormalizers.Lower: IPcStringNormalizer;
+begin
+  Result := FLower;
+end;
+
+class function TPcStringNormalizers.FromFunc(AFunc: TPcStringFunc): IPcStringNormalizer;
+begin
+  if not Assigned(AFunc) then
+    raise EArgumentException.Create('TPcStringNormalizers.FromFunc: AFunc is nil');
+  Result := TStringFuncNormalizer.Create(AFunc);
+end;
+
+class function TPcStringNormalizers.Chain(const ANormalizers: array of IPcStringNormalizer): IPcStringNormalizer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(ANormalizers) do
+    if not Assigned(ANormalizers[I]) then
+      raise EArgumentException.CreateFmt('TPcStringNormalizers.Chain: item %d is nil', [I]);
+  Result := TStringChainNormalizer.Create(ANormalizers);
+end;
+
+{ Integer }
+
+constructor TIntegerFuncNormalizer.Create(AFunc: TPcIntegerFunc);
+begin
+  inherited Create;
+  FFunc := AFunc;
+end;
+
+function TIntegerFuncNormalizer.Apply(const AValue: Integer): Integer;
+begin
+  Result := FFunc(AValue);
+end;
+
+constructor TIntegerChainNormalizer.Create(const ANormalizers: array of IPcIntegerNormalizer);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FItems, Length(ANormalizers));
+  for I := 0 to High(ANormalizers) do
+    FItems[I] := ANormalizers[I];
+end;
+
+function TIntegerChainNormalizer.Apply(const AValue: Integer): Integer;
+var
+  I: Integer;
+begin
+  Result := AValue;
+  for I := 0 to High(FItems) do
+    Result := FItems[I].Apply(Result);
+end;
+
+class function TPcIntegerNormalizers.FromFunc(AFunc: TPcIntegerFunc): IPcIntegerNormalizer;
+begin
+  if not Assigned(AFunc) then
+    raise EArgumentException.Create('TPcIntegerNormalizers.FromFunc: AFunc is nil');
+  Result := TIntegerFuncNormalizer.Create(AFunc);
+end;
+
+class function TPcIntegerNormalizers.Chain(const ANormalizers: array of IPcIntegerNormalizer): IPcIntegerNormalizer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(ANormalizers) do
+    if not Assigned(ANormalizers[I]) then
+      raise EArgumentException.CreateFmt('TPcIntegerNormalizers.Chain: item %d is nil', [I]);
+  Result := TIntegerChainNormalizer.Create(ANormalizers);
+end;
+
+{ Int64 }
+
+constructor TInt64FuncNormalizer.Create(AFunc: TPcInt64Func);
+begin
+  inherited Create;
+  FFunc := AFunc;
+end;
+
+function TInt64FuncNormalizer.Apply(const AValue: Int64): Int64;
+begin
+  Result := FFunc(AValue);
+end;
+
+constructor TInt64ChainNormalizer.Create(const ANormalizers: array of IPcInt64Normalizer);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FItems, Length(ANormalizers));
+  for I := 0 to High(ANormalizers) do
+    FItems[I] := ANormalizers[I];
+end;
+
+function TInt64ChainNormalizer.Apply(const AValue: Int64): Int64;
+var
+  I: Integer;
+begin
+  Result := AValue;
+  for I := 0 to High(FItems) do
+    Result := FItems[I].Apply(Result);
+end;
+
+class function TPcInt64Normalizers.FromFunc(AFunc: TPcInt64Func): IPcInt64Normalizer;
+begin
+  if not Assigned(AFunc) then
+    raise EArgumentException.Create('TPcInt64Normalizers.FromFunc: AFunc is nil');
+  Result := TInt64FuncNormalizer.Create(AFunc);
+end;
+
+class function TPcInt64Normalizers.Chain(const ANormalizers: array of IPcInt64Normalizer): IPcInt64Normalizer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(ANormalizers) do
+    if not Assigned(ANormalizers[I]) then
+      raise EArgumentException.CreateFmt('TPcInt64Normalizers.Chain: item %d is nil', [I]);
+  Result := TInt64ChainNormalizer.Create(ANormalizers);
+end;
+
+{ Single }
+
+constructor TSingleFuncNormalizer.Create(AFunc: TPcSingleFunc);
+begin
+  inherited Create;
+  FFunc := AFunc;
+end;
+
+function TSingleFuncNormalizer.Apply(const AValue: Single): Single;
+begin
+  Result := FFunc(AValue);
+end;
+
+constructor TSingleChainNormalizer.Create(const ANormalizers: array of IPcSingleNormalizer);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FItems, Length(ANormalizers));
+  for I := 0 to High(ANormalizers) do
+    FItems[I] := ANormalizers[I];
+end;
+
+function TSingleChainNormalizer.Apply(const AValue: Single): Single;
+var
+  I: Integer;
+begin
+  Result := AValue;
+  for I := 0 to High(FItems) do
+    Result := FItems[I].Apply(Result);
+end;
+
+class function TPcSingleNormalizers.FromFunc(AFunc: TPcSingleFunc): IPcSingleNormalizer;
+begin
+  if not Assigned(AFunc) then
+    raise EArgumentException.Create('TPcSingleNormalizers.FromFunc: AFunc is nil');
+  Result := TSingleFuncNormalizer.Create(AFunc);
+end;
+
+class function TPcSingleNormalizers.Chain(const ANormalizers: array of IPcSingleNormalizer): IPcSingleNormalizer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(ANormalizers) do
+    if not Assigned(ANormalizers[I]) then
+      raise EArgumentException.CreateFmt('TPcSingleNormalizers.Chain: item %d is nil', [I]);
+  Result := TSingleChainNormalizer.Create(ANormalizers);
+end;
+
+{ Double }
+
+constructor TDoubleFuncNormalizer.Create(AFunc: TPcDoubleFunc);
+begin
+  inherited Create;
+  FFunc := AFunc;
+end;
+
+function TDoubleFuncNormalizer.Apply(const AValue: Double): Double;
+begin
+  Result := FFunc(AValue);
+end;
+
+constructor TDoubleChainNormalizer.Create(const ANormalizers: array of IPcDoubleNormalizer);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FItems, Length(ANormalizers));
+  for I := 0 to High(ANormalizers) do
+    FItems[I] := ANormalizers[I];
+end;
+
+function TDoubleChainNormalizer.Apply(const AValue: Double): Double;
+var
+  I: Integer;
+begin
+  Result := AValue;
+  for I := 0 to High(FItems) do
+    Result := FItems[I].Apply(Result);
+end;
+
+class function TPcDoubleNormalizers.FromFunc(AFunc: TPcDoubleFunc): IPcDoubleNormalizer;
+begin
+  if not Assigned(AFunc) then
+    raise EArgumentException.Create('TPcDoubleNormalizers.FromFunc: AFunc is nil');
+  Result := TDoubleFuncNormalizer.Create(AFunc);
+end;
+
+class function TPcDoubleNormalizers.Chain(const ANormalizers: array of IPcDoubleNormalizer): IPcDoubleNormalizer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(ANormalizers) do
+    if not Assigned(ANormalizers[I]) then
+      raise EArgumentException.CreateFmt('TPcDoubleNormalizers.Chain: item %d is nil', [I]);
+  Result := TDoubleChainNormalizer.Create(ANormalizers);
+end;
+
+{ Currency }
+
+constructor TCurrencyFuncNormalizer.Create(AFunc: TPcCurrencyFunc);
+begin
+  inherited Create;
+  FFunc := AFunc;
+end;
+
+function TCurrencyFuncNormalizer.Apply(const AValue: Currency): Currency;
+begin
+  Result := FFunc(AValue);
+end;
+
+constructor TCurrencyChainNormalizer.Create(const ANormalizers: array of IPcCurrencyNormalizer);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FItems, Length(ANormalizers));
+  for I := 0 to High(ANormalizers) do
+    FItems[I] := ANormalizers[I];
+end;
+
+function TCurrencyChainNormalizer.Apply(const AValue: Currency): Currency;
+var
+  I: Integer;
+begin
+  Result := AValue;
+  for I := 0 to High(FItems) do
+    Result := FItems[I].Apply(Result);
+end;
+
+class function TPcCurrencyNormalizers.FromFunc(AFunc: TPcCurrencyFunc): IPcCurrencyNormalizer;
+begin
+  if not Assigned(AFunc) then
+    raise EArgumentException.Create('TPcCurrencyNormalizers.FromFunc: AFunc is nil');
+  Result := TCurrencyFuncNormalizer.Create(AFunc);
+end;
+
+class function TPcCurrencyNormalizers.Chain(const ANormalizers: array of IPcCurrencyNormalizer): IPcCurrencyNormalizer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(ANormalizers) do
+    if not Assigned(ANormalizers[I]) then
+      raise EArgumentException.CreateFmt('TPcCurrencyNormalizers.Chain: item %d is nil', [I]);
+  Result := TCurrencyChainNormalizer.Create(ANormalizers);
+end;
+
+{ DateTime }
+
+constructor TDateTimeFuncNormalizer.Create(AFunc: TPcDateTimeFunc);
+begin
+  inherited Create;
+  FFunc := AFunc;
+end;
+
+function TDateTimeFuncNormalizer.Apply(const AValue: TDateTime): TDateTime;
+begin
+  Result := FFunc(AValue);
+end;
+
+constructor TDateTimeChainNormalizer.Create(const ANormalizers: array of IPcDateTimeNormalizer);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FItems, Length(ANormalizers));
+  for I := 0 to High(ANormalizers) do
+    FItems[I] := ANormalizers[I];
+end;
+
+function TDateTimeChainNormalizer.Apply(const AValue: TDateTime): TDateTime;
+var
+  I: Integer;
+begin
+  Result := AValue;
+  for I := 0 to High(FItems) do
+    Result := FItems[I].Apply(Result);
+end;
+
+class function TPcDateTimeNormalizers.FromFunc(AFunc: TPcDateTimeFunc): IPcDateTimeNormalizer;
+begin
+  if not Assigned(AFunc) then
+    raise EArgumentException.Create('TPcDateTimeNormalizers.FromFunc: AFunc is nil');
+  Result := TDateTimeFuncNormalizer.Create(AFunc);
+end;
+
+class function TPcDateTimeNormalizers.Chain(const ANormalizers: array of IPcDateTimeNormalizer): IPcDateTimeNormalizer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(ANormalizers) do
+    if not Assigned(ANormalizers[I]) then
+      raise EArgumentException.CreateFmt('TPcDateTimeNormalizers.Chain: item %d is nil', [I]);
+  Result := TDateTimeChainNormalizer.Create(ANormalizers);
+end;
+
+{ Boolean }
+
+constructor TBooleanFuncNormalizer.Create(AFunc: TPcBooleanFunc);
+begin
+  inherited Create;
+  FFunc := AFunc;
+end;
+
+function TBooleanFuncNormalizer.Apply(const AValue: Boolean): Boolean;
+begin
+  Result := FFunc(AValue);
+end;
+
+constructor TBooleanChainNormalizer.Create(const ANormalizers: array of IPcBooleanNormalizer);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FItems, Length(ANormalizers));
+  for I := 0 to High(ANormalizers) do
+    FItems[I] := ANormalizers[I];
+end;
+
+function TBooleanChainNormalizer.Apply(const AValue: Boolean): Boolean;
+var
+  I: Integer;
+begin
+  Result := AValue;
+  for I := 0 to High(FItems) do
+    Result := FItems[I].Apply(Result);
+end;
+
+class function TPcBooleanNormalizers.FromFunc(AFunc: TPcBooleanFunc): IPcBooleanNormalizer;
+begin
+  if not Assigned(AFunc) then
+    raise EArgumentException.Create('TPcBooleanNormalizers.FromFunc: AFunc is nil');
+  Result := TBooleanFuncNormalizer.Create(AFunc);
+end;
+
+class function TPcBooleanNormalizers.Chain(const ANormalizers: array of IPcBooleanNormalizer): IPcBooleanNormalizer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(ANormalizers) do
+    if not Assigned(ANormalizers[I]) then
+      raise EArgumentException.CreateFmt('TPcBooleanNormalizers.Chain: item %d is nil', [I]);
+  Result := TBooleanChainNormalizer.Create(ANormalizers);
+end;
+
+{ Guid }
+
+constructor TGuidFuncNormalizer.Create(AFunc: TPcGuidFunc);
+begin
+  inherited Create;
+  FFunc := AFunc;
+end;
+
+function TGuidFuncNormalizer.Apply(const AValue: TGUID): TGUID;
+begin
+  Result := FFunc(AValue);
+end;
+
+constructor TGuidChainNormalizer.Create(const ANormalizers: array of IPcGuidNormalizer);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FItems, Length(ANormalizers));
+  for I := 0 to High(ANormalizers) do
+    FItems[I] := ANormalizers[I];
+end;
+
+function TGuidChainNormalizer.Apply(const AValue: TGUID): TGUID;
+var
+  I: Integer;
+begin
+  Result := AValue;
+  for I := 0 to High(FItems) do
+    Result := FItems[I].Apply(Result);
+end;
+
+class function TPcGuidNormalizers.FromFunc(AFunc: TPcGuidFunc): IPcGuidNormalizer;
+begin
+  if not Assigned(AFunc) then
+    raise EArgumentException.Create('TPcGuidNormalizers.FromFunc: AFunc is nil');
+  Result := TGuidFuncNormalizer.Create(AFunc);
+end;
+
+class function TPcGuidNormalizers.Chain(const ANormalizers: array of IPcGuidNormalizer): IPcGuidNormalizer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(ANormalizers) do
+    if not Assigned(ANormalizers[I]) then
+      raise EArgumentException.CreateFmt('TPcGuidNormalizers.Chain: item %d is nil', [I]);
+  Result := TGuidChainNormalizer.Create(ANormalizers);
+end;
+
+end.

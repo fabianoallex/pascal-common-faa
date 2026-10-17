@@ -6,6 +6,28 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-16
+
+### Added
+
+- Unit `PascalCommon.Optionals.Normalizers`: one factory class per type (`TPcStringNormalizers`,
+  `TPcIntegerNormalizers`, `TPcInt64Normalizers`, `TPcSingleNormalizers`, `TPcDoubleNormalizers`,
+  `TPcCurrencyNormalizers`, `TPcDateTimeNormalizers`, `TPcBooleanNormalizers`,
+  `TPcGuidNormalizers`), to find normalizers through the editor's completion. Each has
+  `FromFunc(AFunc)` (a `TPcXxxFunc` as a normalizer) and `Chain([...])` (several normalizers
+  applied in order, as one); the string one also has `Trim`, `Upper` and `Lower` (shared
+  instances, the same transformations as `TOptionals.Trim/Upper/Lower`). An application inherits
+  a factory and adds its own normalizers as class functions, so they show up next to the
+  library's: `TNorm.Cep := Chain([Trim, OnlyDigits, MaxLength(8)])`, then
+  `X.Normalize(TNorm.Cep)`. `FromFunc(nil)` and a `nil` item in `Chain` raise
+  `EArgumentException`; `Chain([])` returns the value unchanged. Inheritance rather than a class
+  helper, because Delphi and FPC 3.2 see one helper per type, so two units with helpers would
+  hide each other. The interfaces and function types stay in `PascalCommon.Optionals`.
+- Unit `PascalCommon.Text`: `PcUpperCase` and `PcLowerCase`, Unicode-aware and independent of the
+  process locale on both compilers (gotcha 10). It is the code `TOptionals.Upper/Lower` already
+  used, moved out of `PascalCommon.Optionals` so the normalizers share one copy; behavior is the
+  same.
+
 ## [1.12.0] - 2026-10-16
 
 ### Added

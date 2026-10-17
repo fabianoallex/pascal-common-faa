@@ -31,6 +31,8 @@ uses
   PascalCommon.OptionalsTests,
   PascalCommon.OptionalsNormalizeTests,
   PascalCommon.OptionalsMapTests,
+  PascalCommon.OptionalsNormalizersTests,
+  PascalCommon.TextTests,
   PascalCommon.ThreadPoolTests,
   PascalCommon.SafeLogTests,
   PascalCommon.Utf8Tests,

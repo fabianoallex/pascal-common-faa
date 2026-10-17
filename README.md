@@ -27,10 +27,12 @@ as ARM.
 | `PascalCommon.ClockCache` | `TClockCache<K, V>`: a thread-safe, fixed-size cache (G-Clock eviction) with predictable latency |
 | `PascalCommon.SafeLog` | `SafeWriteln`: a console `Writeln` safe to call from any thread, with one lock for the whole process, and a no-op in a binary without a console (service, GUI). `PcSetSafeLogUtf8(True)` makes it write UTF-8 to a file or a pipe and UTF-16 to a Windows console, the same on both compilers |
 | `PascalCommon.Utf8` | `PcTryUtf8BytesToString`: UTF-8 bytes to a string that refuses, on FPC, to corrupt non-ASCII text when the process code page isn't UTF-8 |
+| `PascalCommon.Text` | `PcUpperCase`, `PcLowerCase`: upper and lower case that map every Unicode letter on both compilers, whatever the process locale (`AnsiUpperCase` on FPC/Linux depends on it; gotcha 10) |
 | `PascalCommon.TraceContext` | W3C Trace Context: new trace and span ids (`PcNewTraceId`, `PcNewSpanId`, from the OS random source), validation, and `traceparent`/`tracestate` parse and format (`PcTryParseTraceParent`, `PcFormatTraceParent`, `PcResolveTraceState`) |
 | `PascalCommon.Metrics` | Counter, up-down counter, gauge and histogram with labels, a registry (`PcMetrics` is the process-wide one), and the Prometheus text exposition (`PcPrometheusText`). OpenTelemetry names and units (`http.server.request.duration`, `s`) become Prometheus names (`http_server_request_duration_seconds`); recording is lock-free on a series |
 | `PascalCommon.Tracing` | Spans: `TPcTracing.StartSpan` (a child of the thread's current span), `StartSpanWith`, `StartSpanFromParent` (from a `traceparent` header), `StartDetachedSpan` (never the current span, finished on any thread) with `StartChildSpan` (an explicit parent), attributes and status; parent-based sampling with a ratio; a batch processor that hands finished spans to an `IPcSpanExporter` on its own thread. The exporter (OTLP over HTTP) lives in pascal-api-infra-faa |
 | `PascalCommon.Optionals` | Optional and nullable types: `IOptXxx` ("was it provided?"), `INullXxx` ("is it null?") and `IOptNullXxx` (both), for String, Integer, Int64, Single, Double, Currency, TDateTime, Boolean and TGUID, with `TOptionals.Safe`, string normalizers that keep the state (`Trim`, `Upper`, `Lower`, `NullIfEmpty`, `UndefinedIfEmpty`), and `Map`/`Normalize` with your own function or normalizer for every type, all in `TOptionals` and as chainable methods |
+| `PascalCommon.Optionals.Normalizers` | Normalizers gathered in one factory class per type (`TPcStringNormalizers`, `TPcIntegerNormalizers`...), to find them by completion and to inherit with your own: `FromFunc`, `Chain`, and `Trim`/`Upper`/`Lower` for string |
 | `PascalCommon.JsonMapper.Optionals` | Optional bridge: a [pascal-jsonmapper-faa](https://github.com/fabianoallex/pascal-jsonmapper-faa) converter for the optional types. Separate package |
 
 ```pascal
@@ -120,6 +122,72 @@ LDeadline := LDto.Deadline.Normalize(TAddBusinessDays.Create(3)); // your IPcDat
 
 Single and Double keep the source's `DecimalPlaces`, except for a result of 0: `From` returns
 its shared zero, whose `DecimalPlaces` is -1.
+
+### One place for your normalizers
+
+With dozens of normalizers, each its own class, finding them gets hard. The unit
+`PascalCommon.Optionals.Normalizers` (1.13.0) has one factory class per type
+(`TPcStringNormalizers`, `TPcIntegerNormalizers`, ... `TPcGuidNormalizers`): type
+`TPcStringNormalizers.` and the editor lists them. Every factory has `FromFunc` (a plain function
+as a normalizer) and `Chain` (several applied in order, as one); the string one also has `Trim`,
+`Upper` and `Lower`. Your application inherits a factory and adds its own as class functions, so
+the editor lists yours and the library's under one name. The classes behind them stay in the
+implementation section:
+
+```pascal
+unit App.Normalizers;
+
+interface
+
+uses PascalCommon.Optionals, PascalCommon.Optionals.Normalizers;
+
+type
+  TNorm = class(TPcStringNormalizers)
+  public
+    class function MaxLength(AMax: Integer): IPcStringNormalizer; static;
+    class function OnlyDigits: IPcStringNormalizer; static;
+    class function Cep: IPcStringNormalizer; static;
+  end;
+
+implementation
+
+type
+  TMaxLength = class(TInterfacedObject, IPcStringNormalizer) ... end;
+
+function DigitsOf(const AValue: string): string; ...
+
+class function TNorm.MaxLength(AMax: Integer): IPcStringNormalizer;
+begin
+  Result := TMaxLength.Create(AMax);
+end;
+
+class function TNorm.OnlyDigits: IPcStringNormalizer;
+begin
+  Result := FromFunc(DigitsOf);
+end;
+
+class function TNorm.Cep: IPcStringNormalizer;
+begin
+  Result := Chain([Trim, OnlyDigits, MaxLength(8)]); // a business rule, named once
+end;
+
+end.
+```
+
+```pascal
+LDto.Zip  := LDto.Zip.Normalize(TNorm.Cep);
+LDto.Name := LDto.Name.Normalize(TNorm.Chain([TNorm.Trim, TNorm.MaxLength(60)]));
+```
+
+- `Trim`, `Upper` and `Lower` return shared instances; they hold no state.
+- `Chain([])` returns the value unchanged, and a `nil` item raises `EArgumentException`. The
+  chain keeps a reference to each item, so `Chain([TX.Create(...)])` frees `TX` with the chain.
+- The library adds a ready-made normalizer only when it is generic (case, blanks, length, digits,
+  rounding, a date without its time) and a second library or a measured case needs it. Business
+  rules (a CEP, a CPF, a phone number) belong in your factory.
+- Use inheritance, not a class helper: Delphi and FPC 3.2 see one helper per type, so two units
+  with helpers for the same class hide each other. A library on top of this one can have its own
+  factory that inherits this one, and the application can inherit that library's factory.
 
 A method can't be called on `nil`. Where the field may be `nil`, start the chain with `Safe`
 (`TOptionals.Safe(LDto.State).Trim.Upper`), or use the `TOptionals` form, which reads `nil` as

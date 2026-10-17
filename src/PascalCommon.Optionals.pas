@@ -54,6 +54,12 @@
   for a result of 0: From returns its shared zero, whose DecimalPlaces is -1.
   TGUID is compared with IsEqualGUID.
 
+  The ready-made normalizers and the factories to gather them (FromFunc,
+  Chain, TPcStringNormalizers...) are in PascalCommon.Optionals.Normalizers
+  (1.13.0); this unit keeps the interfaces and function types, which the
+  Map and Normalize methods need in their signatures. Upper and lower case
+  come from PascalCommon.Text.
+
   Dual-compiler: the cache-key comparers for Single/Double are named
   functions (TEqualityComparer<T>.Construct doesn't accept a closure on FPC
   3.2.2, and the IEqualityComparer<T> signature differs — constref/UInt32 on
@@ -969,10 +975,8 @@ type
 
 implementation
 
-{$IFDEF FPC}
 uses
-  Character;
-{$ENDIF}
+  PascalCommon.Text;
 
 const
   // TGuid.Empty comes from Delphi's TGuidHelper record helper, which doesn't
@@ -1031,32 +1035,17 @@ begin
   Result := SysUtils.Trim(AValue);
 end;
 
-{ Upper and lower case. On Delphi, AnsiUpperCase/AnsiLowerCase map every
-  Unicode letter. On FPC/Unix they go through cwstring, which follows the
-  process locale: measured on FPC 3.2.2/Linux in a container without LANG
-  (locale "C"), AnsiUpperCase('são paulo') gave 'SãO PAULO', and with
-  LANG=C.UTF-8 the same binary gave 'SÃO PAULO' (gotcha 10). So FPC uses the
-  Character unit, whose tables come with the RTL and ignore the locale. The
-  string goes through UnicodeString, which converts from and back to the
-  string's own code page. Cost: Character's tables, about 240 KB in a Linux
-  binary without smart linking, about 90 KB with -XX -CX (measured). }
+{ Upper and lower case: PascalCommon.Text, which doesn't depend on the
+  process locale on FPC/Unix (gotcha 10). }
 
 function NormUpper(const AValue: string): string;
 begin
-  {$IFDEF FPC}
-  Result := string(Character.ToUpper(UnicodeString(AValue)));
-  {$ELSE}
-  Result := AnsiUpperCase(AValue);
-  {$ENDIF}
+  Result := PcUpperCase(AValue);
 end;
 
 function NormLower(const AValue: string): string;
 begin
-  {$IFDEF FPC}
-  Result := string(Character.ToLower(UnicodeString(AValue)));
-  {$ELSE}
-  Result := AnsiLowerCase(AValue);
-  {$ENDIF}
+  Result := PcLowerCase(AValue);
 end;
 
 function IsHiddenNull(const AValue: IInterface): Boolean;

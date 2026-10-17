@@ -190,8 +190,10 @@ container would store `SãO PAULO` without any error.
 `LANG`: `'são paulo ção ñ ü'` → `'SÃO PAULO ÇÃO Ñ Ü'`, and back to lower. Cost: the tables,
 about 240 KB in a Linux binary without smart linking (whether or not the function is called) and
 about 90 KB with `-XX -CX`. `PascalCommon.Optionals` does this since 1.9.0 (`{$IFDEF FPC}`; Delphi
-keeps `AnsiUpperCase`/`AnsiLowerCase`). Its test runs `'são paulo'` on every platform, and the
-Linux CI container has no `LANG`, so a return to the locale-dependent call fails there.
+keeps `AnsiUpperCase`/`AnsiLowerCase`). Since 1.13.0 the code is in `PascalCommon.Text`
+(`PcUpperCase`/`PcLowerCase`), public, and used by `Optionals` and `Optionals.Normalizers`. Its
+tests run `'são paulo'` on every platform, and the Linux CI container has no `LANG`, so a return
+to the locale-dependent call fails there.
 
 
 ## 11. Windows: a redirected stdout isn't UTF-8, and setting it at startup doesn't reach other threads on FPC
