@@ -1,10 +1,31 @@
-﻿unit PascalCommon.Optionals.Normalizers;
+﻿unit PascalCommon.Normalizers;
 
 {$I pascalcommon.inc}
 
-{ Normalizers ready to pass to Normalize, gathered in one factory class per
-  type (TPcStringNormalizers, TPcIntegerNormalizers...), so the editor's
-  completion lists them under one name.
+{ Value normalizers that don't depend on the optionals: one function type
+  and one normalizer interface per type (TPcStringFunc/IPcStringNormalizer,
+  TPcIntegerFunc/IPcIntegerNormalizer...), and one factory class per type
+  (TPcStringNormalizers, TPcIntegerNormalizers...), so the editor's
+  completion lists the normalizers under one name.
+
+  The same normalizer serves a plain value and an optional:
+
+    S := TNorm.Cep.Apply(Edit1.Text);          // this unit only
+    LCep := LDto.Cep.Normalize(TNorm.Cep);     // with PascalCommon.Optionals
+
+  Why a unit of its own (1.14.0): the types and factories were born with the
+  optionals (1.12.0 and 1.13.0), but nothing in them needs one, and code that
+  only wanted to clean a string had to bring in the optionals, their cache
+  and ClockCache. The dependency now goes one way: Text <- Normalizers <-
+  Optionals. PascalCommon.Optionals keeps the type names as aliases (the
+  same types, not copies), so code written for 1.12 that uses only it builds
+  unchanged. The 1.13 unit PascalCommon.Optionals.Normalizers was removed
+  instead of kept as aliases: it had no consumer outside the author's
+  pascal-api-infra-faa sample, migrated in the same change (CHANGELOG).
+
+  Layers: the logic of a ready-made normalizer lives in a plain function
+  (PcUpperCase in PascalCommon.Text), callable without an object, and the
+  normalizer only wraps it, so there is one copy of each rule.
 
   An application inherits a factory and adds its own normalizers as class
   functions; its normalizers and the library's then show up under one name,
@@ -30,8 +51,6 @@
   factory. Today every factory has FromFunc and Chain, and the string one
   also has Trim, Upper and Lower.
 
-  The interfaces (IPcXxxNormalizer) and function types (TPcXxxFunc) stay in
-  PascalCommon.Optionals, because the Map and Normalize methods need them.
   The per-type code is written from one template (FPC 3.2.2 has no generic
   methods on interfaces, and a generic class can't implement an interface
   chosen by a type parameter); keep the types alike. Chain copies the open
@@ -41,9 +60,90 @@
 interface
 
 uses
-  SysUtils, PascalCommon.Optionals;
+  SysUtils;
 
 type
+  /// A string transformation: FromFunc turns one into a normalizer, and the
+  /// optionals' Map takes one directly. A plain function pointer, not
+  /// PASCALCOMMON_FUNCREFS: "of object" on FPC would refuse the plain
+  /// function a Delphi caller passes to a "reference to", so code written
+  /// on one compiler wouldn't build on the other.
+  TPcStringFunc = function(const AValue: string): string;
+
+  /// A string transformation that carries its own parameters or state:
+  /// TMaxLength.Create(50), TPadLeft.Create(8, '0'). Called directly
+  /// (N.Apply(S)) or passed to the optionals' Normalize (1.12.0), which
+  /// calls Apply only for a present value. An interface instead of a
+  /// closure because FPC 3.2.2 has none; the reference count frees the
+  /// object, so X.Normalize(TMaxLength.Create(50)) needs no try/finally. One
+  /// instance may be kept and used for many values, from many threads if
+  /// Apply doesn't change the object. A parameter that takes a normalizer
+  /// should not be const: a newly created object passed to a const
+  /// interface parameter gets no reference and is never freed, and
+  /// Normalize(TX.Create(...)) is the intended use.
+  IPcStringNormalizer = interface
+    ['{72A22294-26D8-4400-B228-9AF19707FCBE}']
+    function Apply(const AValue: string): string;
+  end;
+
+  // The same pair for the other types (1.12.0), with the same rules.
+
+  TPcIntegerFunc = function(const AValue: Integer): Integer;
+
+  IPcIntegerNormalizer = interface
+    ['{D57FC7DF-917C-40E5-ADA3-C5182DCA2701}']
+    function Apply(const AValue: Integer): Integer;
+  end;
+
+  TPcInt64Func = function(const AValue: Int64): Int64;
+
+  IPcInt64Normalizer = interface
+    ['{D24895B5-EDB1-44BA-8B05-FFF941E32EC6}']
+    function Apply(const AValue: Int64): Int64;
+  end;
+
+  TPcSingleFunc = function(const AValue: Single): Single;
+
+  IPcSingleNormalizer = interface
+    ['{E197E442-8EF8-40A5-B856-6FBC2E9EB284}']
+    function Apply(const AValue: Single): Single;
+  end;
+
+  TPcDoubleFunc = function(const AValue: Double): Double;
+
+  IPcDoubleNormalizer = interface
+    ['{DECD0C0B-28E2-4634-AA6C-1DA28A08C49C}']
+    function Apply(const AValue: Double): Double;
+  end;
+
+  TPcCurrencyFunc = function(const AValue: Currency): Currency;
+
+  IPcCurrencyNormalizer = interface
+    ['{EDBA68F0-11DF-4B12-A60E-F6E668AE7DB9}']
+    function Apply(const AValue: Currency): Currency;
+  end;
+
+  TPcDateTimeFunc = function(const AValue: TDateTime): TDateTime;
+
+  IPcDateTimeNormalizer = interface
+    ['{39E60801-94FD-4F3B-BA22-47BB551646DA}']
+    function Apply(const AValue: TDateTime): TDateTime;
+  end;
+
+  TPcBooleanFunc = function(const AValue: Boolean): Boolean;
+
+  IPcBooleanNormalizer = interface
+    ['{45504AF1-53FF-4166-A75E-7F80A5D5392A}']
+    function Apply(const AValue: Boolean): Boolean;
+  end;
+
+  TPcGuidFunc = function(const AValue: TGUID): TGUID;
+
+  IPcGuidNormalizer = interface
+    ['{9EC0CE37-C830-4E9A-85F7-171FDA8EA026}']
+    function Apply(const AValue: TGUID): TGUID;
+  end;
+
   TPcStringNormalizers = class
   strict private
     class var FTrim: IPcStringNormalizer;

@@ -32,7 +32,7 @@ as ARM.
 | `PascalCommon.Metrics` | Counter, up-down counter, gauge and histogram with labels, a registry (`PcMetrics` is the process-wide one), and the Prometheus text exposition (`PcPrometheusText`). OpenTelemetry names and units (`http.server.request.duration`, `s`) become Prometheus names (`http_server_request_duration_seconds`); recording is lock-free on a series |
 | `PascalCommon.Tracing` | Spans: `TPcTracing.StartSpan` (a child of the thread's current span), `StartSpanWith`, `StartSpanFromParent` (from a `traceparent` header), `StartDetachedSpan` (never the current span, finished on any thread) with `StartChildSpan` (an explicit parent), attributes and status; parent-based sampling with a ratio; a batch processor that hands finished spans to an `IPcSpanExporter` on its own thread. The exporter (OTLP over HTTP) lives in pascal-api-infra-faa |
 | `PascalCommon.Optionals` | Optional and nullable types: `IOptXxx` ("was it provided?"), `INullXxx` ("is it null?") and `IOptNullXxx` (both), for String, Integer, Int64, Single, Double, Currency, TDateTime, Boolean and TGUID, with `TOptionals.Safe`, string normalizers that keep the state (`Trim`, `Upper`, `Lower`, `NullIfEmpty`, `UndefinedIfEmpty`), and `Map`/`Normalize` with your own function or normalizer for every type, all in `TOptionals` and as chainable methods |
-| `PascalCommon.Optionals.Normalizers` | Normalizers gathered in one factory class per type (`TPcStringNormalizers`, `TPcIntegerNormalizers`...), to find them by completion and to inherit with your own: `FromFunc`, `Chain`, and `Trim`/`Upper`/`Lower` for string |
+| `PascalCommon.Normalizers` | Value normalizers that don't depend on the optionals: a function type and a normalizer interface per type (`TPcStringFunc`/`IPcStringNormalizer`...), and one factory class per type (`TPcStringNormalizers`, `TPcIntegerNormalizers`...), to find them by completion and to inherit with your own: `FromFunc`, `Chain`, and `Trim`/`Upper`/`Lower` for string. The same normalizer works on a plain value (`N.Apply(S)`) and on an optional (`X.Normalize(N)`) |
 | `PascalCommon.JsonMapper.Optionals` | Optional bridge: a [pascal-jsonmapper-faa](https://github.com/fabianoallex/pascal-jsonmapper-faa) converter for the optional types. Separate package |
 
 ```pascal
@@ -126,7 +126,7 @@ its shared zero, whose `DecimalPlaces` is -1.
 ### One place for your normalizers
 
 With dozens of normalizers, each its own class, finding them gets hard. The unit
-`PascalCommon.Optionals.Normalizers` (1.13.0) has one factory class per type
+`PascalCommon.Normalizers` (1.14.0) has one factory class per type
 (`TPcStringNormalizers`, `TPcIntegerNormalizers`, ... `TPcGuidNormalizers`): type
 `TPcStringNormalizers.` and the editor lists them. Every factory has `FromFunc` (a plain function
 as a normalizer) and `Chain` (several applied in order, as one); the string one also has `Trim`,
@@ -139,7 +139,7 @@ unit App.Normalizers;
 
 interface
 
-uses PascalCommon.Optionals, PascalCommon.Optionals.Normalizers;
+uses PascalCommon.Normalizers; // no optionals needed
 
 type
   TNorm = class(TPcStringNormalizers)
@@ -174,10 +174,24 @@ end;
 end.
 ```
 
+The same normalizer serves an optional and a plain value:
+
 ```pascal
-LDto.Zip  := LDto.Zip.Normalize(TNorm.Cep);
+LDto.Zip  := LDto.Zip.Normalize(TNorm.Cep);       // optional: the state is kept
 LDto.Name := LDto.Name.Normalize(TNorm.Chain([TNorm.Trim, TNorm.MaxLength(60)]));
+
+LZip := TNorm.Cep.Apply(EditZip.Text);             // plain string, no optionals
 ```
+
+`PascalCommon.Normalizers` doesn't depend on `PascalCommon.Optionals` (the dependency goes
+`Text` → `Normalizers` → `Optionals`), so code that only normalizes plain values doesn't bring
+the optionals in. Keep the rule itself in a plain function and wrap it, as `DigitsOf` above:
+code that wants neither objects nor optionals calls the function directly.
+
+Until 1.13 the interfaces and function types were declared in `PascalCommon.Optionals`, which
+still has them as aliases (the same types, not copies), so code that uses only that unit builds
+unchanged. The factories' 1.13 unit, `PascalCommon.Optionals.Normalizers`, was removed in 1.14:
+replace it with `PascalCommon.Normalizers` in the `uses` clause.
 
 - `Trim`, `Upper` and `Lower` return shared instances; they hold no state.
 - `Chain([])` returns the value unchanged, and a `nil` item raises `EArgumentException`. The

@@ -6,7 +6,32 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
-## [1.13.0] - 2026-10-16
+## [1.14.0] - 2026-10-17
+
+### Added
+
+- Unit `PascalCommon.Normalizers`, which doesn't depend on the optionals: the function types and
+  normalizer interfaces (`TPcStringFunc`/`IPcStringNormalizer` ... `TPcGuidFunc`/`IPcGuidNormalizer`,
+  same GUIDs) and the factories (`TPcStringNormalizers` ... `TPcGuidNormalizers`), moved here
+  without changes. A normalizer now serves a plain value without bringing in the optionals:
+  `TNorm.Cep.Apply(S)`, as well as `X.Normalize(TNorm.Cep)`. The dependency goes
+  `Text` → `Normalizers` → `Optionals`.
+
+### Changed
+
+- `PascalCommon.Optionals` declares the function types and normalizer interfaces as aliases of
+  `PascalCommon.Normalizers`. An alias is the same type, so code written for 1.12 that uses only
+  `PascalCommon.Optionals` builds and behaves the same.
+
+### Removed
+
+- Unit `PascalCommon.Optionals.Normalizers` (1.13.0): its factories are in
+  `PascalCommon.Normalizers`, unchanged. **An exception to strict semver**, taken knowingly: the
+  unit was one day old, and its only consumer, the sample and DTO guide of pascal-api-infra-faa,
+  was migrated in the same change. Code written for 1.13.0 replaces the unit name in its `uses`
+  clause; nothing else changes. 1.13.0 is marked yanked below.
+
+## [1.13.0] - 2026-10-16 [YANKED]
 
 ### Added
 

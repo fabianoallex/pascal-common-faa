@@ -54,11 +54,12 @@
   for a result of 0: From returns its shared zero, whose DecimalPlaces is -1.
   TGUID is compared with IsEqualGUID.
 
-  The ready-made normalizers and the factories to gather them (FromFunc,
-  Chain, TPcStringNormalizers...) are in PascalCommon.Optionals.Normalizers
-  (1.13.0); this unit keeps the interfaces and function types, which the
-  Map and Normalize methods need in their signatures. Upper and lower case
-  come from PascalCommon.Text.
+  The function types, the normalizer interfaces and the factories that
+  gather the ready-made normalizers (FromFunc, Chain, TPcStringNormalizers...)
+  are in PascalCommon.Normalizers (1.14.0), which doesn't depend on this
+  unit, so a normalizer also serves a plain value. This unit re-exports the
+  types as aliases, so code that uses only PascalCommon.Optionals still sees
+  them. Upper and lower case come from PascalCommon.Text.
 
   Dual-compiler: the cache-key comparers for Single/Double are named
   functions (TEqualityComparer<T>.Construct doesn't accept a closure on FPC
@@ -70,90 +71,30 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs, PascalCommon.SystemContext,
-  PascalCommon.ClockCache, Generics.Defaults;
+  PascalCommon.ClockCache, PascalCommon.Normalizers, Generics.Defaults;
 
 type
-  /// A string transformation for TOptionals.Map and the fluent Map of the
-  /// string flavors. A plain function pointer, not PASCALCOMMON_FUNCREFS:
-  /// "of object" on FPC would refuse the plain function a Delphi caller
-  /// passes to a "reference to", so code written on one compiler wouldn't
-  /// build on the other.
-  TPcStringFunc = function(const AValue: string): string;
-
-  /// A string transformation that carries its own parameters or state, for
-  /// Normalize (1.12.0): TMaxLength.Create(50), TPadLeft.Create(8, '0'). An
-  /// interface instead of a closure because FPC 3.2.2 has none; the
-  /// reference count frees the object, so X.Normalize(TMaxLength.Create(50))
-  /// needs no try/finally. Apply is called only for a present value. One
-  /// instance may be kept and used for many values, from many threads if
-  /// Apply doesn't change the object. The Normalize parameters that take it
-  /// are not const on purpose: a newly created object passed to a const
-  /// interface parameter gets no reference and is never freed, and
-  /// Normalize(TX.Create(...)) is the intended use.
-  IPcStringNormalizer = interface
-    ['{72A22294-26D8-4400-B228-9AF19707FCBE}']
-    function Apply(const AValue: string): string;
-  end;
-
-  // Map and Normalize for the other types (1.12.0): the same rules as the
-  // string ones. Single and Double keep the source's DecimalPlaces (but a
-  // result of 0 is From's shared zero, DecimalPlaces -1).
-
-  TPcIntegerFunc = function(const AValue: Integer): Integer;
-
-  IPcIntegerNormalizer = interface
-    ['{D57FC7DF-917C-40E5-ADA3-C5182DCA2701}']
-    function Apply(const AValue: Integer): Integer;
-  end;
-
-  TPcInt64Func = function(const AValue: Int64): Int64;
-
-  IPcInt64Normalizer = interface
-    ['{D24895B5-EDB1-44BA-8B05-FFF941E32EC6}']
-    function Apply(const AValue: Int64): Int64;
-  end;
-
-  TPcSingleFunc = function(const AValue: Single): Single;
-
-  IPcSingleNormalizer = interface
-    ['{E197E442-8EF8-40A5-B856-6FBC2E9EB284}']
-    function Apply(const AValue: Single): Single;
-  end;
-
-  TPcDoubleFunc = function(const AValue: Double): Double;
-
-  IPcDoubleNormalizer = interface
-    ['{DECD0C0B-28E2-4634-AA6C-1DA28A08C49C}']
-    function Apply(const AValue: Double): Double;
-  end;
-
-  TPcCurrencyFunc = function(const AValue: Currency): Currency;
-
-  IPcCurrencyNormalizer = interface
-    ['{EDBA68F0-11DF-4B12-A60E-F6E668AE7DB9}']
-    function Apply(const AValue: Currency): Currency;
-  end;
-
-  TPcDateTimeFunc = function(const AValue: TDateTime): TDateTime;
-
-  IPcDateTimeNormalizer = interface
-    ['{39E60801-94FD-4F3B-BA22-47BB551646DA}']
-    function Apply(const AValue: TDateTime): TDateTime;
-  end;
-
-  TPcBooleanFunc = function(const AValue: Boolean): Boolean;
-
-  IPcBooleanNormalizer = interface
-    ['{45504AF1-53FF-4166-A75E-7F80A5D5392A}']
-    function Apply(const AValue: Boolean): Boolean;
-  end;
-
-  TPcGuidFunc = function(const AValue: TGUID): TGUID;
-
-  IPcGuidNormalizer = interface
-    ['{9EC0CE37-C830-4E9A-85F7-171FDA8EA026}']
-    function Apply(const AValue: TGUID): TGUID;
-  end;
+  // Declared in PascalCommon.Normalizers since 1.14.0, which doesn't depend
+  // on the optionals; the aliases keep these names visible to code that
+  // uses only this unit. An alias is the same type, not a copy.
+  TPcStringFunc = PascalCommon.Normalizers.TPcStringFunc;
+  IPcStringNormalizer = PascalCommon.Normalizers.IPcStringNormalizer;
+  TPcIntegerFunc = PascalCommon.Normalizers.TPcIntegerFunc;
+  IPcIntegerNormalizer = PascalCommon.Normalizers.IPcIntegerNormalizer;
+  TPcInt64Func = PascalCommon.Normalizers.TPcInt64Func;
+  IPcInt64Normalizer = PascalCommon.Normalizers.IPcInt64Normalizer;
+  TPcSingleFunc = PascalCommon.Normalizers.TPcSingleFunc;
+  IPcSingleNormalizer = PascalCommon.Normalizers.IPcSingleNormalizer;
+  TPcDoubleFunc = PascalCommon.Normalizers.TPcDoubleFunc;
+  IPcDoubleNormalizer = PascalCommon.Normalizers.IPcDoubleNormalizer;
+  TPcCurrencyFunc = PascalCommon.Normalizers.TPcCurrencyFunc;
+  IPcCurrencyNormalizer = PascalCommon.Normalizers.IPcCurrencyNormalizer;
+  TPcDateTimeFunc = PascalCommon.Normalizers.TPcDateTimeFunc;
+  IPcDateTimeNormalizer = PascalCommon.Normalizers.IPcDateTimeNormalizer;
+  TPcBooleanFunc = PascalCommon.Normalizers.TPcBooleanFunc;
+  IPcBooleanNormalizer = PascalCommon.Normalizers.IPcBooleanNormalizer;
+  TPcGuidFunc = PascalCommon.Normalizers.TPcGuidFunc;
+  IPcGuidNormalizer = PascalCommon.Normalizers.IPcGuidNormalizer;
 
   IOptionalBase = interface
     ['{E4F4A971-9D82-4072-9FCD-B94B3534D00B}']

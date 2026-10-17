@@ -15,7 +15,7 @@
     </CompilerOptions>
     <Description Value="Base library shared by the *-faa libraries (Delphi and Free Pascal/Lazarus, dual-compiler): optional/nullable types, portable atomics and monotonic time, a monitor and a thread pool, a clock/sleep context, a bounded cache, a thread-safe console Writeln, W3C trace context ids, metrics with a Prometheus writer, and spans with a batch processor."/>
     <License Value="MIT"/>
-    <Version Major="1" Minor="13"/>
+    <Version Major="1" Minor="14"/>
     <Files>
       <Item>
         <Filename Value="..\src\pascalcommon.inc"/>
@@ -58,8 +58,8 @@
         <UnitName Value="PascalCommon.Text"/>
       </Item>
       <Item>
-        <Filename Value="..\src\PascalCommon.Optionals.Normalizers.pas"/>
-        <UnitName Value="PascalCommon.Optionals.Normalizers"/>
+        <Filename Value="..\src\PascalCommon.Normalizers.pas"/>
+        <UnitName Value="PascalCommon.Normalizers"/>
       </Item>
       <Item>
         <Filename Value="..\src\PascalCommon.TraceContext.pas"/>

@@ -16,9 +16,9 @@
   linking, about 90 KB with -XX -CX (measured).
 
   It came out of PascalCommon.Optionals in 1.13.0, where it was private to
-  TOptionals.Upper/Lower, when PascalCommon.Optionals.Normalizers needed the
-  same code: one copy, so the FPC branch can't drift between the two. It is
-  public because any consumer that changes the case of a name in a Linux
+  TOptionals.Upper/Lower, when the normalizer factories (now
+  PascalCommon.Normalizers) needed the same code: one copy, so the FPC
+  branch can't drift between the two. It is public because any consumer that changes the case of a name in a Linux
   container meets the same locale trap. This file is UTF-8 with a BOM, so
   Delphi reads the example above right. }
 

@@ -191,7 +191,7 @@ container would store `SãO PAULO` without any error.
 about 240 KB in a Linux binary without smart linking (whether or not the function is called) and
 about 90 KB with `-XX -CX`. `PascalCommon.Optionals` does this since 1.9.0 (`{$IFDEF FPC}`; Delphi
 keeps `AnsiUpperCase`/`AnsiLowerCase`). Since 1.13.0 the code is in `PascalCommon.Text`
-(`PcUpperCase`/`PcLowerCase`), public, and used by `Optionals` and `Optionals.Normalizers`. Its
+(`PcUpperCase`/`PcLowerCase`), public, and used by `Optionals` and `Normalizers`. Its
 tests run `'são paulo'` on every platform, and the Linux CI container has no `LANG`, so a return
 to the locale-dependent call fails there.
 
