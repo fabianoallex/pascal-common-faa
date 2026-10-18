@@ -6,6 +6,19 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-10-18
+
+### Added
+
+- Unit `PascalCommon.AesGcm`: `PcAesGcmEncrypt` and `PcAesGcmDecrypt`, AES-128/192/256 in
+  Galois/Counter Mode (NIST SP 800-38D) with additional authenticated data and 128-bit tags,
+  and `PcAesEncryptBlock` (FIPS-197). Pure Pascal, the same on both compilers; checked against
+  FIPS-197 appendix C, McGrew and Viega's GCM test cases 1-4 and 13-16, and vectors from
+  OpenSSL (AES-192, 8- and 60-byte nonces, a 1000-byte text), all recomputed with OpenSSL.
+  Decryption compares the tag in constant time; the S-box is a table lookup (stated in the
+  unit: fine for secrets at rest, not for decrypting what any client sends at a high rate).
+  First user: pascal-api-infra-faa's JWT signing keys, sealed in their store.
+
 ## [1.15.0] - 2026-10-18
 
 ### Added

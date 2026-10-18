@@ -37,6 +37,7 @@ uses
   PascalCommon.ThreadPoolTests,
   PascalCommon.SafeLogTests,
   PascalCommon.Utf8Tests,
+  PascalCommon.AesGcmTests,
   PascalCommon.RandomTests,
   PascalCommon.TraceContextTests,
   PascalCommon.MetricsTests,

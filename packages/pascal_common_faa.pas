@@ -11,8 +11,8 @@ uses
   PascalCommon.Version, PascalCommon.Threading, PascalCommon.SystemContext, 
   PascalCommon.ClockCache, PascalCommon.Optionals, PascalCommon.ThreadPool, 
   PascalCommon.SafeLog, PascalCommon.Utf8, PascalCommon.Text, 
-  PascalCommon.Normalizers, PascalCommon.Random, PascalCommon.TraceContext, 
-  PascalCommon.Metrics, PascalCommon.Tracing;
+  PascalCommon.Normalizers, PascalCommon.AesGcm, PascalCommon.Random, 
+  PascalCommon.TraceContext, PascalCommon.Metrics, PascalCommon.Tracing;
 
 implementation
 
