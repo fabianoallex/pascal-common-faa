@@ -6,6 +6,21 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-10-18
+
+### Added
+
+- Unit `PascalCommon.Random`: `PcFillRandom(var ABuffer; ACount)` and `PcRandomBytes(ACount)`,
+  random bytes from the operating system's cryptographic source (BCryptGenRandom on Windows,
+  `/dev/urandom` elsewhere), raising `EPcRandom` when the source fails and never falling back
+  to `Random`. For secrets: pascal-api-infra-faa's JWT signing keys are its second user.
+
+### Changed
+
+- `PascalCommon.TraceContext` takes its random bytes from `PascalCommon.Random` (the same code,
+  moved). Its ids and its errors are unchanged: a failure of the source is still
+  `EPcTraceContext`, with the same message.
+
 ## [1.14.0] - 2026-10-17
 
 ### Added

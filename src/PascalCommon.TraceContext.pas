@@ -18,21 +18,12 @@ unit PascalCommon.TraceContext;
   to a header or a log line. PcFormatTraceParent writes what it is given;
   callers pass ids from PcNewTraceId/PcNewSpanId or from a parsed header.
 
-  Random source. CreateGUID was read in FPC 3.2.2's RTL before choosing:
-  on Linux it reads /proc/sys/kernel/random/uuid and parses the string, then
-  /dev/urandom, and as a last resort Random (a Mersenne twister seeded from
-  the clock, a global state not safe across threads); on Unix systems other
-  than Linux and FreeBSD it is Random alone. A GUID v4 also has fixed
-  version and variant bits, and TGUID's first fields are little-endian in
-  memory. So the bytes come from the OS directly: BCryptGenRandom
-  (BCRYPT_USE_SYSTEM_PREFERRED_RNG, Windows 7 and later) on Windows, and
-  /dev/urandom elsewhere, opened once in initialization (no lazily created
-  shared state, see CLAUDE.md) and read through SysUtils' FileRead, which
-  both compilers have on every POSIX target. Concurrent reads of one
-  /dev/urandom descriptor are safe: it is a character device with no
-  position. If the source fails, EPcTraceContext is raised rather than
-  falling back to a predictable generator: a trace id that repeats across
-  processes merges unrelated traces in the backend.
+  Random source: PascalCommon.Random (BCryptGenRandom on Windows,
+  /dev/urandom elsewhere; never CreateGUID or Random, see that unit). The
+  code lived here until 1.15.0. A failure of the source is still raised as
+  EPcTraceContext, with the same message, rather than falling back to a
+  predictable generator: a trace id that repeats across processes merges
+  unrelated traces in the backend.
 
   Parsing follows the specification's text (Level 1, sections 3.2 and 3.3):
   lowercase hex only, version ff invalid, all-zero trace id or parent id
@@ -98,52 +89,24 @@ function PcResolveTraceState(ATraceParentValid: Boolean; const AHeader: string):
 
 implementation
 
-{$IFDEF PASCALCOMMON_WINDOWS}
-const
-  BCRYPT_USE_SYSTEM_PREFERRED_RNG = $00000002;
-
-function BCryptGenRandom(hAlgorithm: Pointer; pbBuffer: PByte; cbBuffer: Cardinal;
-  dwFlags: Cardinal): LongInt; stdcall; external 'bcrypt.dll' name 'BCryptGenRandom';
-{$ELSE}
-const
-  URANDOM_PATH = '/dev/urandom';
-
-var
-  GUrandom: THandle;
-  GUrandomOpen: Boolean;
-{$ENDIF}
+uses
+  PascalCommon.Random;
 
 const
   HEX_DIGITS: array[0..15] of Char = ('0', '1', '2', '3', '4', '5', '6', '7',
     '8', '9', 'a', 'b', 'c', 'd', 'e', 'f');
 
+// PascalCommon.Random's source, its failure raised as this unit's exception
+// (the class and messages of 1.5.0 to 1.14.0).
 procedure FillRandom(var ABuffer; ACount: Integer);
-{$IFDEF PASCALCOMMON_WINDOWS}
-var
-  LStatus: LongInt;
 begin
-  LStatus := BCryptGenRandom(nil, PByte(@ABuffer), ACount, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-  if LStatus <> 0 then
-    raise EPcTraceContext.CreateFmt('BCryptGenRandom failed (NTSTATUS $%.8x)', [LStatus]);
-end;
-{$ELSE}
-var
-  P: PByte;
-  LRead: Integer;
-begin
-  if not GUrandomOpen then
-    raise EPcTraceContext.Create('Cannot open ' + URANDOM_PATH);
-  P := PByte(@ABuffer);
-  while ACount > 0 do
-  begin
-    LRead := FileRead(GUrandom, P^, ACount);
-    if LRead <= 0 then
-      raise EPcTraceContext.Create('Cannot read ' + URANDOM_PATH);
-    Inc(P, LRead);
-    Dec(ACount, LRead);
+  try
+    PcFillRandom(ABuffer, ACount);
+  except
+    on E: EPcRandom do
+      raise EPcTraceContext.Create(E.Message);
   end;
 end;
-{$ENDIF}
 
 function NewRandomHex(AByteCount: Integer): string;
 var
@@ -303,15 +266,5 @@ begin
   if Length(Result) > PC_TRACESTATE_MAX_LENGTH then
     Result := '';
 end;
-
-{$IFNDEF PASCALCOMMON_WINDOWS}
-initialization
-  GUrandom := FileOpen(URANDOM_PATH, fmOpenRead or fmShareDenyNone);
-  GUrandomOpen := GUrandom <> THandle(-1);
-
-finalization
-  if GUrandomOpen then
-    FileClose(GUrandom);
-{$ENDIF}
 
 end.
