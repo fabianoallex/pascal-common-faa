@@ -194,7 +194,7 @@ code instead of writing a third copy; the skill's `references/faa-libraries.md` 
 | AES-GCM (authenticated encryption) | needed by pascal-api-infra-faa to seal JWT signing keys in their store (its `docs/jwt-keys-design.md`, decision 6 revised); written here directly at the user's choice (2026-10-18), ahead of a second user | **added in 1.16.0** (`PascalCommon.AesGcm`) |
 | Random bytes from the OS source (BCryptGenRandom, `/dev/urandom`) | was private in this library's `PascalCommon.TraceContext`; pascal-api-infra-faa needs it for JWT signing keys (its `docs/jwt-keys-design.md`, decision 7) | **public in 1.15.0** (`PascalCommon.Random`); TraceContext uses it |
 | String to UTF-8 bytes; MD5 as hex (System.Hash on Delphi, `md5` on FPC); UTF-8-safe prefix | pascal-api-infra-faa `PascalApi.Text` | one library |
-| SHA-256, HMAC-SHA256, Base64url, constant-time comparison (FPC 3.2.2 has no SHA-256) | pascal-api-infra-faa `PascalApi.Crypto` (only `SysUtils`; NIST/RFC 4231/RFC 4648 vectors in `PascalApi.CryptoTests`) | one library |
+| SHA-256, HMAC-SHA256, Base64url, constant-time comparison (FPC 3.2.2 has no SHA-256) | was in pascal-api-infra-faa `PascalApi.Crypto` (NIST/RFC 4231/RFC 4648 vectors) | **moved in 1.17.0** (`PascalCommon.Crypto`), at the user's choice, to sit with `PascalCommon.AesGcm`; pascal-api-infra-faa keeps its `Pa*` functions as wrappers |
 
 Moving one is additive here (a new unit, a minor release) and then a deprecation in the
 library it came from.

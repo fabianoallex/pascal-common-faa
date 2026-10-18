@@ -6,6 +6,18 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-10-18
+
+### Added
+
+- Unit `PascalCommon.Crypto`: `PcSha256` (FIPS 180-4), `PcHmacSha256` (RFC 2104),
+  `PcBase64UrlEncode`/`PcBase64UrlDecode` (RFC 4648 section 5, no padding; padding accepted on
+  input), `PcBytesToHex`, `PcDigestToBytes` and `PcSameBytes` (constant-time comparison). Moved
+  from pascal-api-infra-faa's `PascalApi.Crypto`, which keeps its `Pa*` functions as wrappers,
+  so the crypto of the `*-faa` libraries lives in one place next to `PascalCommon.AesGcm`.
+  FPC 3.2.2 has no SHA-256 and HMAC only for MD5 and SHA-1. Its tests came along: FIPS 180
+  examples and block-boundary lengths, RFC 4231 cases 1, 2, 3, 6 and 7, RFC 4648 section 10.
+
 ## [1.16.0] - 2026-10-18
 
 ### Added
