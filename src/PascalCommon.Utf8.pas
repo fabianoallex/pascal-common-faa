@@ -35,6 +35,13 @@ uses
 /// with "?"). Empty input gives True and ''.
 function PcTryUtf8BytesToString(const ABytes: TBytes; out AText: string): Boolean;
 
+/// AText as UTF-8 bytes, without a BOM (1.18.0). On FPC the conversion
+/// follows the string's own code page: nothing to do when it is already
+/// UTF-8, a real conversion from any other. Moved from pascal-api-infra-faa's
+/// PaStringToUtf8Bytes (PascalApi.Text), the same body, for passwords given
+/// to PcPbkdf2HmacSha256 and any other text that is hashed.
+function PcStringToUtf8Bytes(const AText: string): TBytes;
+
 implementation
 
 function PcTryUtf8BytesToString(const ABytes: TBytes; out AText: string): Boolean;
@@ -64,6 +71,23 @@ begin
   AText := string(LUtf8);
   {$ELSE}
   AText := TEncoding.UTF8.GetString(ABytes, LStart, LLen - LStart);
+  {$ENDIF}
+end;
+
+function PcStringToUtf8Bytes(const AText: string): TBytes;
+{$IFDEF FPC}
+var
+  LUtf8: UTF8String;
+{$ENDIF}
+begin
+  Result := nil;
+  {$IFDEF FPC}
+  LUtf8 := UTF8String(AText);
+  SetLength(Result, Length(LUtf8));
+  if Length(LUtf8) > 0 then
+    Move(LUtf8[1], Result[0], Length(LUtf8));
+  {$ELSE}
+  Result := TEncoding.UTF8.GetBytes(AText);
   {$ENDIF}
 end;
 

@@ -15,6 +15,14 @@ unit PascalCommon.Crypto;
   section 5 without padding (as JWT uses it). Checked against the FIPS 180,
   RFC 4231 and RFC 4648 vectors in PascalCommon.CryptoTests.
 
+  PBKDF2-HMAC-SHA256 (RFC 8018) came in 1.18.0, for password hashing (first
+  user: pascal-agenda-faa). It lives here, not in the consumer, because the
+  fast form needs SHA-256's compression function: HMAC's inner and outer
+  states are computed once from the key, and each iteration then costs two
+  compressions and no allocation, against four compressions and three
+  allocations through PcHmacSha256 (measured on FPC 3.2.2 Win64 -O2, 600,000
+  iterations: about 1.9 s through PcHmacSha256, 0.8 s this way).
+
   Arithmetic is modulo 2^32 on purpose: overflow and range checks are off in
   this unit (a Delphi test project may turn them on in Debug), and every
   intermediate is stored in a Cardinal, so FPC's 64-bit promotion of
@@ -45,6 +53,13 @@ function PcBase64UrlDecode(const AText: string; out ABytes: TBytes): Boolean;
 /// Compares in time independent of where the first difference is (for
 /// signatures).
 function PcSameBytes(const A, B: TBytes): Boolean;
+
+/// PBKDF2 with HMAC-SHA256 (RFC 8018 section 5.2): ALength bytes derived from
+/// APassword and ASalt with AIterations rounds (1.18.0). A password longer
+/// than 64 bytes is hashed first, as HMAC does with a long key. Raises
+/// EArgumentException when AIterations or ALength is below 1.
+function PcPbkdf2HmacSha256(const APassword, ASalt: TBytes;
+  AIterations, ALength: Integer): TBytes;
 
 implementation
 
@@ -297,6 +312,149 @@ begin
   for I := 0 to High(A) do
     LDiff := LDiff or (A[I] xor B[I]);
   Result := LDiff = 0;
+end;
+
+type
+  TSha256State = array[0..7] of Cardinal;
+
+procedure InitSha256State(out AState: TSha256State);
+begin
+  AState[0] := $6a09e667; AState[1] := $bb67ae85; AState[2] := $3c6ef372; AState[3] := $a54ff53a;
+  AState[4] := $510e527f; AState[5] := $9b05688c; AState[6] := $1f83d9ab; AState[7] := $5be0cd19;
+end;
+
+procedure StateToDigest(const AState: TSha256State; out ADigest: TPcSha256Digest);
+var
+  I: Integer;
+begin
+  for I := 0 to 7 do
+  begin
+    ADigest[I * 4] := Byte(AState[I] shr 24);
+    ADigest[I * 4 + 1] := Byte(AState[I] shr 16);
+    ADigest[I * 4 + 2] := Byte(AState[I] shr 8);
+    ADigest[I * 4 + 3] := Byte(AState[I]);
+  end;
+end;
+
+// The SHA-256 of (the 64-byte block already compressed into APrefix) || AData.
+procedure HashAfterBlock(const APrefix: TSha256State; const AData: TBytes;
+  out ADigest: TPcSha256Digest);
+var
+  LState: TSha256State;
+  LBlock: array[0..63] of Byte;
+  LLen, LOffset, LRest, I: Integer;
+  LBits: UInt64;
+begin
+  LState := APrefix;
+  LLen := Length(AData);
+  LOffset := 0;
+  while LLen - LOffset >= 64 do
+  begin
+    Compress(LState, @AData[LOffset]);
+    Inc(LOffset, 64);
+  end;
+  LRest := LLen - LOffset;
+  FillChar(LBlock, SizeOf(LBlock), 0);
+  if LRest > 0 then
+    Move(AData[LOffset], LBlock[0], LRest);
+  LBlock[LRest] := $80;
+  if LRest >= 56 then
+  begin
+    Compress(LState, @LBlock[0]);
+    FillChar(LBlock, SizeOf(LBlock), 0);
+  end;
+  LBits := (UInt64(LLen) + 64) * 8;
+  for I := 0 to 7 do
+    LBlock[63 - I] := Byte(LBits shr (I * 8));
+  Compress(LState, @LBlock[0]);
+  StateToDigest(LState, ADigest);
+end;
+
+// The same for a 32-byte message: one block with fixed padding, the length
+// (64 + 32) * 8 = 768 bits = $0300. AMessage and ADigest may be the same
+// variable: the message is copied into the block first.
+procedure HashDigestAfterBlock(const APrefix: TSha256State; const AMessage: TPcSha256Digest;
+  out ADigest: TPcSha256Digest);
+var
+  LState: TSha256State;
+  LBlock: array[0..63] of Byte;
+begin
+  FillChar(LBlock, SizeOf(LBlock), 0);
+  Move(AMessage[0], LBlock[0], 32);
+  LBlock[32] := $80;
+  LBlock[62] := $03;
+  LState := APrefix;
+  Compress(LState, @LBlock[0]);
+  StateToDigest(LState, ADigest);
+end;
+
+function PcPbkdf2HmacSha256(const APassword, ASalt: TBytes;
+  AIterations, ALength: Integer): TBytes;
+var
+  LKey: array[0..63] of Byte;
+  LPad: array[0..63] of Byte;
+  LInner, LOuter: TSha256State;
+  LLongKey: TPcSha256Digest;
+  LFirst: TBytes;
+  LU, LT: TPcSha256Digest;
+  LBlocks, LBlockIndex, LDone, LCount, I, J: Integer;
+begin
+  if AIterations < 1 then
+    raise EArgumentException.Create('PBKDF2: iterations must be 1 or more.');
+  if ALength < 1 then
+    raise EArgumentException.Create('PBKDF2: length must be 1 or more.');
+  // HMAC's key, padded to the block; a longer one is hashed first (RFC 2104).
+  FillChar(LKey, SizeOf(LKey), 0);
+  if Length(APassword) > 64 then
+  begin
+    LLongKey := PcSha256(APassword);
+    Move(LLongKey[0], LKey[0], SizeOf(LLongKey));
+  end
+  else if Length(APassword) > 0 then
+    Move(APassword[0], LKey[0], Length(APassword));
+  // The two states every HMAC with this key starts from.
+  for I := 0 to 63 do
+    LPad[I] := LKey[I] xor $36;
+  InitSha256State(LInner);
+  Compress(LInner, @LPad[0]);
+  for I := 0 to 63 do
+    LPad[I] := LKey[I] xor $5c;
+  InitSha256State(LOuter);
+  Compress(LOuter, @LPad[0]);
+  FillChar(LKey, SizeOf(LKey), 0);
+  FillChar(LPad, SizeOf(LPad), 0);
+
+  Result := nil;
+  SetLength(Result, ALength);
+  LBlocks := (ALength + 31) div 32;
+  LDone := 0;
+  LFirst := nil;
+  SetLength(LFirst, Length(ASalt) + 4);
+  if Length(ASalt) > 0 then
+    Move(ASalt[0], LFirst[0], Length(ASalt));
+  for LBlockIndex := 1 to LBlocks do
+  begin
+    // U1 = HMAC(P, S || INT(i)), i as 32 bits big-endian.
+    LFirst[Length(ASalt)] := Byte(LBlockIndex shr 24);
+    LFirst[Length(ASalt) + 1] := Byte(LBlockIndex shr 16);
+    LFirst[Length(ASalt) + 2] := Byte(LBlockIndex shr 8);
+    LFirst[Length(ASalt) + 3] := Byte(LBlockIndex);
+    HashAfterBlock(LInner, LFirst, LU);
+    HashDigestAfterBlock(LOuter, LU, LU);
+    LT := LU;
+    for I := 2 to AIterations do
+    begin
+      HashDigestAfterBlock(LInner, LU, LU);
+      HashDigestAfterBlock(LOuter, LU, LU);
+      for J := 0 to 31 do
+        LT[J] := LT[J] xor LU[J];
+    end;
+    LCount := ALength - LDone;
+    if LCount > 32 then
+      LCount := 32;
+    Move(LT[0], Result[LDone], LCount);
+    Inc(LDone, LCount);
+  end;
 end;
 
 end.

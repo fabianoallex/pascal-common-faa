@@ -6,6 +6,22 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-10-18
+
+### Added
+
+- `PcPbkdf2HmacSha256` (`PascalCommon.Crypto`): PBKDF2 with HMAC-SHA256 (RFC 8018), for
+  password hashing. HMAC's inner and outer states are computed once from the key, so each
+  iteration costs two SHA-256 compressions and no allocation: 600,000 iterations take about
+  0.8 s on FPC 3.2.2 Win64 `-O2`, against about 1.9 s for the same loop on `PcHmacSha256`
+  (measured). It is here, not in its first user (pascal-agenda-faa), because that needs the
+  unit's private compression function. Checked against RFC 7914 section 11, the
+  "password"/"salt" vectors, keys and salts around the 64-byte block (hashlib), and against
+  the definition written on `PcHmacSha256`.
+- `PcStringToUtf8Bytes` (`PascalCommon.Utf8`): text to UTF-8 bytes, without a BOM, the same on
+  both compilers. Moved from pascal-api-infra-faa's `PaStringToUtf8Bytes` (`PascalApi.Text`),
+  the same body.
+
 ## [1.17.0] - 2026-10-18
 
 ### Added

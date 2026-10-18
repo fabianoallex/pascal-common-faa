@@ -1,7 +1,7 @@
 ﻿unit PascalCommon.Utf8Tests;
 
 { Tests for PascalCommon.Utf8: ASCII and non-ASCII text, the BOM, empty
-  input, and on FPC the refusal outside a UTF-8 code page (the test switches
+  input, text to UTF-8 bytes (1.18.0), and on FPC the refusal outside a UTF-8 code page (the test switches
   the code page to 1252 and back, as pascal-db-faa's SqlSources tests did for
   the function this replaces there).
 
@@ -25,6 +25,8 @@ type
     [Test] procedure Bom_IsDropped;
     [Test] procedure Empty_And_BomOnly;
     [Test] procedure NonAscii_OutsideUtf8CodePage_IsRefusedOnFpc;
+    [Test] procedure StringToUtf8Bytes_AsciiAndEmpty;
+    [Test] procedure StringToUtf8Bytes_NonAscii;
   end;
 
 implementation
@@ -105,6 +107,36 @@ begin
   TAssert.AssertTrue(PcTryUtf8BytesToString(NonAsciiBytes, LText));
   TAssert.AssertEquals('São →', LText);
   {$ENDIF}
+end;
+
+procedure TUtf8Tests.StringToUtf8Bytes_AsciiAndEmpty;
+var
+  LBytes: TBytes;
+begin
+  LBytes := PcStringToUtf8Bytes('ok');
+  TAssert.AssertEquals(2, Length(LBytes));
+  TAssert.AssertEquals(Ord('o'), Integer(LBytes[0]));
+  TAssert.AssertEquals(Ord('k'), Integer(LBytes[1]));
+  TAssert.AssertEquals(0, Length(PcStringToUtf8Bytes('')));
+end;
+
+procedure TUtf8Tests.StringToUtf8Bytes_NonAscii;
+const
+  // A typed constant: FPC warns (4104/4105) on a non-ASCII literal in an
+  // expression.
+  SAO: string = 'São →';
+var
+  LBytes, LExpected: TBytes;
+  LText: string;
+  I: Integer;
+begin
+  LBytes := PcStringToUtf8Bytes(SAO);
+  LExpected := NonAsciiBytes;
+  TAssert.AssertEquals(Length(LExpected), Length(LBytes));
+  for I := 0 to High(LExpected) do
+    TAssert.AssertEquals(Format('byte %d', [I]), Integer(LExpected[I]), Integer(LBytes[I]));
+  TAssert.AssertTrue(PcTryUtf8BytesToString(LBytes, LText));
+  TAssert.AssertEquals(SAO, LText);
 end;
 
 initialization
