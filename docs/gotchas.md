@@ -258,3 +258,26 @@ so the class can't implement them by name.
 clause; give the new form its own name. 1.12.0 shipped it as `Normalize(ANormalizer)` next to
 `Map(AFunc)`. That also keeps a literal `nil` passed to `Map` unambiguous. The FPC build doesn't
 catch this: build on Delphi before calling an interface change done.
+
+## 13. FPC 3.2.2: a fractional literal used as a `Currency` value is a near value
+
+**Symptom.** `TPcCurrencyValidators.Range(0, 100000.5)` refused `100000.5` and its message said
+"from 0 to 100000.4992". Measured with a probe (1.21.0), FPC 3.2.2 `-O2` and `-O-`, Windows x64
+and Linux x86_64, reading the `Int64` units of the `Currency` received:
+
+| The value | Units (expected 1000005000 for 100000.5) |
+|---|---|
+| the literal `100000.5` passed to a `Currency` parameter | 1000004992 |
+| `V := 100000.5` (a `Currency` variable) | 1000004992 |
+| a typed constant `const C: Currency = 100000.5` | 1000005000 |
+| a `Double` variable holding `100000.5`, then assigned | 1000005000 |
+| the literals `80.5` and `1.234` | 805000 and 12340 (exact) |
+
+**Cause.** Not determined (the compiler's conversion of a real constant to `Currency`); small
+values come out right, so a test with small numbers doesn't show it. Delphi not measured.
+
+**Fix.** Write `Currency` values from code as typed constants or whole numbers, never as a
+fractional literal in an expression: `const MAX_PRICE: Currency = 100000.5;`. The library's
+tests do. pascal-jsonmapper-faa's Currency path never meets it (it builds the units from the
+text). See also the skill's `rtl-gotchas.md` (`Currency(integer)` reinterprets the bits on FPC
+Linux).

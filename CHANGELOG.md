@@ -6,6 +6,32 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-10-19
+
+### Added
+
+- `PascalCommon.Validators`: checks that refuse a value and change nothing, the partner of the
+  normalizers. One validator interface and one factory per type: `TPcStringValidators`
+  (`Required`, `MinLength`, `MaxLength`, `OneOf`), `TPcIntegerValidators` and
+  `TPcInt64Validators` (`Min`, `Max`, `Range`, `MultipleOf`), `TPcDoubleValidators` and
+  `TPcDateTimeValidators` (`Min`, `Max`, `Range`), `TPcCurrencyValidators` (also `MaxDecimals`,
+  on the exact units), each with `FromFunc` and `All` (the first failure answers). An application
+  inherits a factory to add its rules. `TPcValidation` collects the failures, one per field, with
+  one `Check` overload per shape of member (a plain value always checked, an `IOptXxx` when it
+  came, an `INullXxx`/`IOptNullXxx` when it holds a value), plus `Fail` for a rule across members;
+  `RaiseIfAny` raises `EPcValidationError` with every failure (`Errors`: field, code, message).
+  `TPcValidationMessages` (English, Portuguese, `Current`). Designed in pascal-api-infra-faa's
+  `docs/validation-design.md`, whose error handler will answer it with a 400 that lists the
+  fields; pascal-agenda-faa's repositories wrote each rule three times by hand.
+- `PcCharCount` (`PascalCommon.Text`): characters as Unicode code points, the same on both
+  compilers (what JSON Schema's `maxLength` counts); the validators' lengths use it.
+
+### Documented
+
+- Gotcha 13: FPC 3.2.2 turns a fractional literal used as a `Currency` value into a near value
+  (`100000.5` becomes `100000.4992`, Windows and Linux); write `Currency` bounds as typed
+  constants.
+
 ## [1.20.0] - 2026-10-19
 
 ### Added

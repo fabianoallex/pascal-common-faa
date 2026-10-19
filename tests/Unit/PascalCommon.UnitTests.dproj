@@ -120,6 +120,7 @@
         <DCCReference Include="..\..\src\PascalCommon.ClockCache.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Text.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Normalizers.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.Validators.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Optionals.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.ThreadPool.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.SafeLog.pas"/>
@@ -141,6 +142,7 @@
         <DCCReference Include="PascalCommon.OptionalsNormalizeTests.pas"/>
         <DCCReference Include="PascalCommon.OptionalsMapTests.pas"/>
         <DCCReference Include="PascalCommon.NormalizersTests.pas"/>
+        <DCCReference Include="PascalCommon.ValidatorsTests.pas"/>
         <DCCReference Include="PascalCommon.OptionalsNormalizersTests.pas"/>
         <DCCReference Include="PascalCommon.TextTests.pas"/>
         <DCCReference Include="PascalCommon.ThreadPoolTests.pas"/>

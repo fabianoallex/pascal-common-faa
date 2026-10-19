@@ -34,6 +34,7 @@ type
     procedure Fold_Blanks;
     procedure Fold_KeepsWhatItDoesntKnow;
     procedure Fold_LowerCasesOtherScripts;
+    procedure CharCount_CodePoints;
   end;
 
 implementation
@@ -89,6 +90,15 @@ procedure TTextTests.Fold_LowerCasesOtherScripts;
 begin
   // Outside the accent table a letter is only lower-cased (PcLowerCase).
   TAssert.AssertEquals('ωμέγα москва', PcFoldForSearch('ΩΜΈΓΑ МОСКВА'));
+end;
+
+procedure TTextTests.CharCount_CodePoints;
+begin
+  TAssert.AssertEquals(0, PcCharCount(''));
+  TAssert.AssertEquals(3, PcCharCount('abc'));
+  TAssert.AssertEquals('accents: one character each', 3, PcCharCount('São'));
+  TAssert.AssertEquals('an emoji is one character (a surrogate pair)', 3, PcCharCount('a😀b'));
+  TAssert.AssertEquals(2, PcCharCount('東京'));
 end;
 
 initialization

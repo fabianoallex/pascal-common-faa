@@ -50,6 +50,12 @@ function PcLowerCase(const AValue: string): string;
 /// space. 'São  CONCEIÇÃO ' gives 'sao conceicao' on both compilers.
 function PcFoldForSearch(const AValue: string): string;
 
+/// The number of characters (Unicode code points) in AValue, the same on
+/// both compilers (1.21.0): Length counts UTF-8 bytes on FPC and UTF-16 units
+/// on Delphi, so "at most 100 characters" needs this. 'São' is 3, an emoji 1.
+/// The length JSON Schema's minLength/maxLength mean.
+function PcCharCount(const AValue: string): Integer;
+
 implementation
 
 uses
@@ -138,6 +144,19 @@ begin
   end;
   SetLength(LOut, N);
   Result := string(LOut);
+end;
+
+function PcCharCount(const AValue: string): Integer;
+var
+  LText: UnicodeString;
+  I: Integer;
+begin
+  // UTF-16 units, the second half of a surrogate pair not counted.
+  LText := UnicodeString(AValue);
+  Result := 0;
+  for I := 1 to Length(LText) do
+    if (Ord(LText[I]) < $DC00) or (Ord(LText[I]) > $DFFF) then
+      Inc(Result);
 end;
 
 end.

@@ -32,6 +32,7 @@ uses
   PascalCommon.OptionalsNormalizeTests,
   PascalCommon.OptionalsMapTests,
   PascalCommon.NormalizersTests,
+  PascalCommon.ValidatorsTests,
   PascalCommon.OptionalsNormalizersTests,
   PascalCommon.TextTests,
   PascalCommon.ThreadPoolTests,
