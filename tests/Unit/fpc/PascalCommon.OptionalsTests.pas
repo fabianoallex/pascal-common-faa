@@ -9,7 +9,8 @@
 { Tests for the optional types (PascalCommon.Optionals): HasValue/IsNull of
   Null/Undefined/From for each type, TOptionals.Safe with nil, instance reuse
   (fixed range and dynamic cache), distinct precision keys for Single/Double
-  and concurrent access to From.
+  and concurrent access to From; ValueOr in the three flavors (1.19.0), and
+  TrueValue/FalseValue going into every boolean interface (what From can't).
 
   DUnitX master, written in FPCUnit's assertion dialect (TAssert.*, through
   PascalCommon.DUnitXCompat). The mirror in tests/Unit/fpc is generated from the
@@ -39,6 +40,19 @@ type
     function GetText: string;
     procedure SetText(AValue: string);
     property Text: string read GetText write SetText;
+  end;
+
+  TOptionalValueOrTests = class(TTestCase)
+  published
+    procedure ValueOr_Opt_UndefinedGivesTheDefault;
+    procedure ValueOr_Opt_ValueGivesTheValue;
+    procedure ValueOr_Null_NullGivesTheDefault;
+    procedure ValueOr_Null_ValueGivesTheValue;
+    procedure ValueOr_OptNull_UndefinedAndNullGiveTheDefault;
+    procedure ValueOr_OptNull_ValueGivesTheValue;
+    procedure ValueOr_EveryType;
+    procedure ValueOr_OnSafeOfNil;
+    procedure BooleanTrueFalse_GoIntoEveryInterface;
   end;
 
   TOptionalTests = class(TTestCase)
@@ -596,6 +610,116 @@ begin
   end;
 end;
 
+{ TOptionalValueOrTests }
+
+procedure TOptionalValueOrTests.ValueOr_Opt_UndefinedGivesTheDefault;
+var
+  LOpt: IOptInteger;
+begin
+  LOpt := TOptNullInteger.Undefined;
+  TAssert.AssertEquals(7, LOpt.ValueOr(7));
+end;
+
+procedure TOptionalValueOrTests.ValueOr_Opt_ValueGivesTheValue;
+var
+  LOpt: IOptInteger;
+begin
+  LOpt := TOptNullInteger.From(3);
+  TAssert.AssertEquals(3, LOpt.ValueOr(7));
+  LOpt := TOptNullInteger.From(0);
+  TAssert.AssertEquals('a value of 0 is a value', 0, LOpt.ValueOr(7));
+end;
+
+procedure TOptionalValueOrTests.ValueOr_Null_NullGivesTheDefault;
+var
+  LNull: INullString;
+begin
+  LNull := TOptNullString.Null;
+  TAssert.AssertEquals('none', LNull.ValueOr('none'));
+end;
+
+procedure TOptionalValueOrTests.ValueOr_Null_ValueGivesTheValue;
+var
+  LNull: INullString;
+begin
+  LNull := TOptNullString.From('ana');
+  TAssert.AssertEquals('ana', LNull.ValueOr('none'));
+  LNull := TOptNullString.From('');
+  TAssert.AssertEquals('an empty string is a value', '', LNull.ValueOr('none'));
+end;
+
+procedure TOptionalValueOrTests.ValueOr_OptNull_UndefinedAndNullGiveTheDefault;
+var
+  LOptNull: IOptNullInteger;
+begin
+  LOptNull := TOptNullInteger.Undefined;
+  TAssert.AssertEquals(-1, LOptNull.ValueOr(-1));
+  LOptNull := TOptNullInteger.Null;
+  TAssert.AssertEquals(-1, LOptNull.ValueOr(-1));
+end;
+
+procedure TOptionalValueOrTests.ValueOr_OptNull_ValueGivesTheValue;
+var
+  LOptNull: IOptNullInteger;
+begin
+  LOptNull := TOptNullInteger.From(42);
+  TAssert.AssertEquals(42, LOptNull.ValueOr(-1));
+end;
+
+procedure TOptionalValueOrTests.ValueOr_EveryType;
+var
+  LInt64: IOptInt64;
+  LDouble: IOptDouble;
+  LCurrency: IOptCurrency;
+  LDate: IOptDateTime;
+  LBool: IOptBoolean;
+  LGuid: IOptGuid;
+  LDefaultGuid: TGUID;
+begin
+  LInt64 := TOptNullInt64.Undefined;
+  TAssert.AssertEquals(Int64(5000000000), LInt64.ValueOr(5000000000));
+  LDouble := TOptNullDouble.From(1.5);
+  TAssert.AssertEquals(1.5, LDouble.ValueOr(9), 0);
+  LCurrency := TOptNullCurrency.Undefined;
+  TAssert.AssertEquals(Currency(12.34), LCurrency.ValueOr(12.34));
+  LCurrency := TOptNullCurrency.From(80.5);
+  TAssert.AssertEquals(Currency(80.5), LCurrency.ValueOr(12.34));
+  LDate := TOptNullDateTime.Undefined;
+  TAssert.AssertEquals(EncodeDate(2026, 10, 18), LDate.ValueOr(EncodeDate(2026, 10, 18)), 0);
+  LBool := TOptNullBoolean.Undefined;
+  TAssert.AssertTrue(LBool.ValueOr(True));
+  LBool := TOptNullBoolean.FalseValue;
+  TAssert.AssertFalse(LBool.ValueOr(True));
+  LDefaultGuid := StringToGUID('{4D5B9E22-6E0C-4B8F-9C51-4E3B2E7A1F00}');
+  LGuid := TOptNullGuid.Undefined;
+  TAssert.AssertTrue(IsEqualGUID(LDefaultGuid, LGuid.ValueOr(LDefaultGuid)));
+end;
+
+procedure TOptionalValueOrTests.ValueOr_OnSafeOfNil;
+var
+  LNil: IOptString;
+begin
+  LNil := nil;
+  TAssert.AssertEquals('fallback', TOptionals.Safe(LNil).ValueOr('fallback'));
+end;
+
+// What From can't do (it returns IOptNullBoolean): the class goes into each.
+procedure TOptionalValueOrTests.BooleanTrueFalse_GoIntoEveryInterface;
+var
+  LOpt: IOptBoolean;
+  LNull: INullBoolean;
+  LOptNull: IOptNullBoolean;
+begin
+  LOpt := TOptNullBoolean.TrueValue;
+  LNull := TOptNullBoolean.FalseValue;
+  LOptNull := TOptNullBoolean.TrueValue;
+  TAssert.AssertTrue(LOpt.HasValue and LOpt.Value);
+  TAssert.AssertFalse(LNull.IsNull or LNull.Value);
+  TAssert.AssertTrue(LOptNull.Value);
+  TAssert.AssertTrue((TOptNullBoolean.From(True) as IOptBoolean).Value);
+end;
+
 initialization
+  RegisterTest(TOptionalValueOrTests);
   RegisterTest(TOptionalTests);
 end.

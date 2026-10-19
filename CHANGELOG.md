@@ -6,6 +6,25 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-10-18
+
+### Added
+
+- `ValueOr(ADefault)` on `IOptional<T>`, `INullable<T>` and `IOptionalNullable<T>`, so on every
+  `IOptXxx`, `INullXxx` and `IOptNullXxx`: the value when there is one, `ADefault` when the
+  optional is undefined or null. One implementation in `TOptionalNullable<T>`. Asked by
+  pascal-agenda-faa, where every default was an `if HasValue` (`LBuffer :=
+  AService.GetBufferMinutes.ValueOr(0)`). The interfaces are implemented only by this unit's
+  classes (stated since 1.11.0), which is what lets a minor version add the method.
+
+### Documented
+
+- `TOptNullBoolean.From` returns `IOptNullBoolean`, unlike every other optional's `From`, which
+  returns its class: it doesn't go into an `IOptBoolean` or an `INullBoolean` without `as`.
+  `TOptNullBoolean.TrueValue`/`FalseValue` return the class and go into any of them. Kept for
+  compatibility (changing a return type is a signature change); `docs/plan.md`, "Planned for
+  2.0", records the fix.
+
 ## [1.18.0] - 2026-10-18
 
 ### Added

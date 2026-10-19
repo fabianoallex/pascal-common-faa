@@ -219,6 +219,15 @@ delphi-api-infra-faa and its consumers staying on v1.1.1 costs nothing: they use
 `SystemContext` and `ClockCache`, which haven't changed since, and not the pool that 1.1.3 and
 1.2.0 fixed.
 
+## Planned for 2.0
+
+Changes that break source compatibility, so they wait for a major version (this library's
+strict semver). Each one says why it isn't done now and what a 1.x user does meanwhile.
+
+| Change | Why it waits | Meanwhile |
+|---|---|---|
+| `TOptNullBoolean.From` returns `TOptNullBoolean`, like every other optional's `From` | Its result is `IOptNullBoolean` since the unit came from pascal-db-faa, an oversight (the user, 2026-10-18); changing a return type is a signature change. Measured 2026-10-18: every caller found in the family (pascal-db-faa, the jsonmapper bridge, this repository's tests, api-test) assigns it or casts it with `as`, and all of them would still compile; the only code that breaks is a call passing `From(...)` straight to a routine overloaded for two of the boolean interfaces (`TOptionals.Safe`, for instance), which becomes ambiguous. None was found. | `TrueValue`/`FalseValue`, which return the class; or `From(B) as IOptBoolean` |
+
 ## Name map
 
 Moved to [`migrating.md`](migrating.md) in F5, together with the steps for a library and the

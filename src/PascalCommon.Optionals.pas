@@ -115,18 +115,30 @@ type
   IOptional<T> = interface(IOptionalBase)
     ['{ED862237-1C8B-4B92-95D1-65E47B4D83B7}']
     function GetValue: T;
+    /// The value when there is one; ADefault when it is undefined or null
+    /// (1.19.0). On a reference that may be nil, start from
+    /// TOptionals.Safe(X).ValueOr(...).
+    function ValueOr(const ADefault: T): T;
     property Value: T read GetValue;
   end;
 
   INullable<T> = interface(INullableBase)
     ['{676D05B3-6E6F-4F82-A9AB-455E9464F866}']
     function GetValue: T;
+    /// The value when there is one; ADefault when it is undefined or null
+    /// (1.19.0). On a reference that may be nil, start from
+    /// TOptionals.Safe(X).ValueOr(...).
+    function ValueOr(const ADefault: T): T;
     property Value: T read GetValue;
   end;
 
   IOptionalNullable<T> = interface(IOptionalNullableBase)
     ['{B27511F9-7746-4432-9165-CF31D058053A}']
     function GetValue: T;
+    /// The value when there is one; ADefault when it is undefined or null
+    /// (1.19.0). On a reference that may be nil, start from
+    /// TOptionals.Safe(X).ValueOr(...).
+    function ValueOr(const ADefault: T): T;
     property Value: T read GetValue;
   end;
 
@@ -508,6 +520,9 @@ type
   public
     constructor Create(AValue: T); overload;
     function GetValue: T;
+    /// One method for the three interfaces: only a defined, non-null
+    /// instance has a value of its own.
+    function ValueOr(const ADefault: T): T;
     property Value: T read GetValue;
   end;
 
@@ -833,6 +848,12 @@ type
     class function Undefined: TOptNullBoolean; static;
     class function TrueValue: TOptNullBoolean; static;
     class function FalseValue: TOptNullBoolean; static;
+    /// TrueValue or FalseValue, as the interface IOptNullBoolean. Unlike
+    /// every other optional's From, which returns its class, this one can't
+    /// go into an IOptBoolean or an INullBoolean: write
+    /// TOptNullBoolean.TrueValue/FalseValue there (they return the class),
+    /// or From(B) as IOptBoolean. An oversight kept for compatibility;
+    /// docs/plan.md, "Planned for 2.0", returns the class.
     class function From(AValue: Boolean): IOptNullBoolean; static;
   end;
 
@@ -2257,6 +2278,14 @@ end;
 function TOptionalNullable<T>.GetValue: T;
 begin
   Result := FValue;
+end;
+
+function TOptionalNullable<T>.ValueOr(const ADefault: T): T;
+begin
+  if FHasValue and not FIsNull then
+    Result := FValue
+  else
+    Result := ADefault;
 end;
 
 { TOptNullString }
