@@ -6,6 +6,20 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-10-19
+
+### Added
+
+- `PcFoldForSearch` (`PascalCommon.Text`): a search key. Lower case (`PcLowerCase`, every
+  Unicode letter, whatever the locale), the accents of Latin letters removed (Latin-1
+  Supplement and Latin Extended-A), blanks trimmed and each run made one space:
+  `'  São   CONCEIÇÃO'` gives `'sao conceicao'` on both compilers. SQLite's `LOWER`/`LIKE`
+  fold ASCII only and PostgreSQL's depend on the collation, so an application stores the key
+  next to the text and folds the search the same way. Moved from pascal-agenda-faa
+  (`Agenda.Text`, where three repositories search through it), at the user's choice.
+- `TPcStringNormalizers.FoldForSearch`: the same as a normalizer, so
+  `LDto.Name.Normalize(TPcStringNormalizers.FoldForSearch)` works on an optional.
+
 ## [1.19.0] - 2026-10-18
 
 ### Added

@@ -49,7 +49,7 @@
   or a measured case asks for one, as everything in pascal-common-faa.
   Business rules (a CEP, a CPF, a phone number) belong in the application's
   factory. Today every factory has FromFunc and Chain, and the string one
-  also has Trim, Upper and Lower.
+  also has Trim, Upper, Lower and (1.20.0) FoldForSearch.
 
   The per-type code is written from one template (FPC 3.2.2 has no generic
   methods on interfaces, and a generic class can't implement an interface
@@ -149,6 +149,7 @@ type
     class var FTrim: IPcStringNormalizer;
     class var FUpper: IPcStringNormalizer;
     class var FLower: IPcStringNormalizer;
+    class var FFoldForSearch: IPcStringNormalizer;
   public
     class constructor Create;
     class destructor Destroy;
@@ -157,6 +158,9 @@ type
     class function Trim: IPcStringNormalizer; static;
     class function Upper: IPcStringNormalizer; static;
     class function Lower: IPcStringNormalizer; static;
+    /// PascalCommon.Text's PcFoldForSearch (1.20.0): a search key, lower
+    /// case, Latin accents removed, blanks collapsed.
+    class function FoldForSearch: IPcStringNormalizer; static;
     /// A plain function as a normalizer. AFunc = nil raises EArgumentException.
     class function FromFunc(AFunc: TPcStringFunc): IPcStringNormalizer; static;
     /// The normalizers applied in order, as one. An empty list returns the
@@ -403,6 +407,11 @@ begin
   Result := PcLowerCase(AValue);
 end;
 
+function NormFoldForSearch(const AValue: string): string;
+begin
+  Result := PcFoldForSearch(AValue);
+end;
+
 { String }
 
 constructor TStringFuncNormalizer.Create(AFunc: TPcStringFunc);
@@ -440,6 +449,7 @@ begin
   FTrim := TStringFuncNormalizer.Create(NormTrim);
   FUpper := TStringFuncNormalizer.Create(NormUpper);
   FLower := TStringFuncNormalizer.Create(NormLower);
+  FFoldForSearch := TStringFuncNormalizer.Create(NormFoldForSearch);
 end;
 
 class destructor TPcStringNormalizers.Destroy;
@@ -447,6 +457,7 @@ begin
   FTrim := nil;
   FUpper := nil;
   FLower := nil;
+  FFoldForSearch := nil;
 end;
 
 class function TPcStringNormalizers.Trim: IPcStringNormalizer;
@@ -462,6 +473,11 @@ end;
 class function TPcStringNormalizers.Lower: IPcStringNormalizer;
 begin
   Result := FLower;
+end;
+
+class function TPcStringNormalizers.FoldForSearch: IPcStringNormalizer;
+begin
+  Result := FFoldForSearch;
 end;
 
 class function TPcStringNormalizers.FromFunc(AFunc: TPcStringFunc): IPcStringNormalizer;

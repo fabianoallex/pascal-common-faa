@@ -299,6 +299,7 @@ begin
   TAssert.AssertEquals('trim', 'a b', TPcStringNormalizers.Trim.Apply('  a b '));
   TAssert.AssertEquals('upper', 'SÃO PAULO', TPcStringNormalizers.Upper.Apply('são paulo'));
   TAssert.AssertEquals('lower', 'são paulo', TPcStringNormalizers.Lower.Apply('SÃO PAULO'));
+  TAssert.AssertEquals('fold', 'sao paulo', TPcStringNormalizers.FoldForSearch.Apply(' SÃO  Paulo '));
 end;
 
 procedure TNormalizersTests.Builtins_AreSharedInstances;
@@ -306,6 +307,7 @@ begin
   TAssert.AssertTrue('trim', TPcStringNormalizers.Trim = TPcStringNormalizers.Trim);
   TAssert.AssertTrue('upper', TPcStringNormalizers.Upper = TPcStringNormalizers.Upper);
   TAssert.AssertTrue('lower', TPcStringNormalizers.Lower = TPcStringNormalizers.Lower);
+  TAssert.AssertTrue('fold', TPcStringNormalizers.FoldForSearch = TPcStringNormalizers.FoldForSearch);
 end;
 
 procedure TNormalizersTests.FromFunc_AppliesTheFunction;
