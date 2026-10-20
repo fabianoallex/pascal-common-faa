@@ -6,6 +6,32 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-10-20
+
+### Added
+
+- `PascalCommon.TimeZones`: IANA time zones on both compilers (neither RTL converts an
+  arbitrary zone). `IPcTimeZone`: `ToLocal` (an instant's local reading, `TPcLocalDateTime` with
+  `IsoWeekday`), `OffsetAt`/`Info` (offset in seconds, DST flag, abbreviation), `ToUtc` with the
+  daylight-saving gap and overlap resolved as java.time and NodaTime do by default (forward by the
+  gap, the earlier offset; `TPcGapRule`/`TPcOverlapRule` choose otherwise, `Map` gives every
+  answer), `DayBounds` (a local day from its first valid instant: 23 h, 25 h, 23.5 h...),
+  `NextTransition`, and `TDateTime` conveniences. Instants are Int64 Unix seconds; years 1 to
+  9999. One reader for TZif (versions 1 to 4, fat or slim) and its POSIX TZ footer; sources:
+  `TPcEmbeddedTzSource` (the default), `TPcDirectoryTzSource` (`/usr/share/zoneinfo`),
+  `TPcMemoryTzSource`. `TPcTimeZoneCatalog` (`PcTimeZones`, the embedded one) finds zones by
+  their exact, case-sensitive name, accepts the backward links (`US/Eastern`), refuses a
+  malformed name before any source sees it, and `TryCanonicalCase` finds the spelling for an
+  error message. Thread-safe: zones are immutable, the catalog parses each on first use behind
+  a lock. `PcUtcZone`, `PcIsWellFormedTimeZoneName`. Designed in `docs/timezones-design.md` for
+  pascal-agenda-faa's free slots.
+- `PascalCommon.TimeZones.Data` (generated): the IANA tzdb **2026e**, 344 zones and 253 links,
+  206 641 bytes of TZif as `zic -b slim` wrote them. `tools/gen_tzdata.py` rebuilds it, and
+  the golden file the tests check every zone against (zdump's transitions 1970-2040, Python
+  zoneinfo's offsets and gap/overlap answers), from a release's tarball;
+  `tools/check_tzdb.sh` says when IANA has a newer release. A tzdb update that changes a zone
+  will be a patch release.
+
 ## [1.21.0] - 2026-10-19
 
 ### Added

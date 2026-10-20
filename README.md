@@ -37,6 +37,7 @@ as ARM.
 | `PascalCommon.Optionals` | Optional and nullable types: `IOptXxx` ("was it provided?"), `INullXxx` ("is it null?") and `IOptNullXxx` (both), for String, Integer, Int64, Single, Double, Currency, TDateTime, Boolean and TGUID, with `TOptionals.Safe`, string normalizers that keep the state (`Trim`, `Upper`, `Lower`, `NullIfEmpty`, `UndefinedIfEmpty`), and `Map`/`Normalize` with your own function or normalizer for every type, all in `TOptionals` and as chainable methods; `ValueOr(default)` on every one (1.19.0). `TOptNullBoolean.From` returns the interface `IOptNullBoolean`; for an `IOptBoolean` or `INullBoolean` use `TrueValue`/`FalseValue` |
 | `PascalCommon.Normalizers` | Value normalizers that don't depend on the optionals: a function type and a normalizer interface per type (`TPcStringFunc`/`IPcStringNormalizer`...), and one factory class per type (`TPcStringNormalizers`, `TPcIntegerNormalizers`...), to find them by completion and to inherit with your own: `FromFunc`, `Chain`, and `Trim`/`Upper`/`Lower` for string. The same normalizer works on a plain value (`N.Apply(S)`) and on an optional (`X.Normalize(N)`) |
 | `PascalCommon.Validators` | (1.21.0) Checks that refuse a value and change nothing, the normalizers' partner: a validator interface and a factory per type (`TPcStringValidators`: `Required`, `MinLength`, `MaxLength`, `OneOf`; numbers and dates: `Min`, `Max`, `Range`, `MultipleOf`, `MaxDecimals`), `FromFunc`, `All`; `TPcValidation` collects every failing field (an optional checked only when it came) and raises them together as `EPcValidationError`; messages in English and Portuguese |
+| `PascalCommon.TimeZones` | (1.22.0) IANA time zones on both compilers (neither RTL converts an arbitrary zone): an instant's local time and offset, a local time's instant with the daylight-saving gap and overlap resolved (java.time's defaults, or your rule), a local day's bounds (23 h, 25 h...), zone names checked case-sensitively (`US/Eastern` and the other backward links accepted). The IANA tzdb is embedded (`PascalCommon.TimeZones.Data`, 2026e, about 200 KB), so the four targets give the same answers; a zoneinfo directory such as `/usr/share/zoneinfo` is an option. Instants are Unix seconds |
 | `PascalCommon.JsonMapper.Optionals` | Optional bridge: a [pascal-jsonmapper-faa](https://github.com/fabianoallex/pascal-jsonmapper-faa) converter for the optional types. Separate package |
 
 ```pascal
@@ -215,6 +216,35 @@ them.
 
 Only the string optionals have normalizers. The other types get theirs when a consumer needs
 them.
+
+### Time zones
+
+```pascal
+uses PascalCommon.TimeZones;
+
+var
+  LZone: IPcTimeZone;
+  LSpelled: string;
+  LStart, LDayStart, LDayEnd: Int64;
+begin
+  if not PcTimeZones.TryFind(ATenantZone, LZone) then
+    if PcTimeZones.TryCanonicalCase(ATenantZone, LSpelled) then
+      raise Exception.CreateFmt('Unknown time zone; did you mean %s?', [LSpelled])
+    else
+      raise Exception.Create('Unknown time zone');
+  // Monday's 09:00 in the tenant's zone, as Unix seconds.
+  LStart := LZone.ToUtc(TPcLocalDateTime.Create(2026, 3, 9, 9, 0));
+  // The local day 2026-03-08 in New York lasts 23 hours.
+  LZone.DayBounds(2026, 3, 8, LDayStart, LDayEnd);
+  WriteLn(LZone.ToLocal(LStart).IsoWeekday);    // 1 = Monday
+end;
+```
+
+A local time that doesn't exist (02:30 when the clock jumps from 02:00 to 03:00) moves forward
+by the gap, to 03:30; one that happens twice (01:30 when the clock goes back) takes the first.
+Pass `gapStartOfAfter`, `gapRaise`, `overlapLater` or `overlapRaise` to `ToUtc` for another rule,
+or call `Map` to see every answer. Design, measurements and the update policy for the embedded
+data: [`docs/timezones-design.md`](docs/timezones-design.md).
 
 ## Installing
 

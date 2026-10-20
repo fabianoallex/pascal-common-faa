@@ -15,7 +15,7 @@
     </CompilerOptions>
     <Description Value="Base library shared by the *-faa libraries (Delphi and Free Pascal/Lazarus, dual-compiler): optional/nullable types, portable atomics and monotonic time, a monitor and a thread pool, a clock/sleep context, a bounded cache, a thread-safe console Writeln, W3C trace context ids, metrics with a Prometheus writer, and spans with a batch processor."/>
     <License Value="MIT"/>
-    <Version Major="1" Minor="21"/>
+    <Version Major="1" Minor="22"/>
     <Files>
       <Item>
         <Filename Value="..\src\pascalcommon.inc"/>
@@ -64,6 +64,14 @@
       <Item>
         <Filename Value="..\src\PascalCommon.Validators.pas"/>
         <UnitName Value="PascalCommon.Validators"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.TimeZones.Data.pas"/>
+        <UnitName Value="PascalCommon.TimeZones.Data"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.TimeZones.pas"/>
+        <UnitName Value="PascalCommon.TimeZones"/>
       </Item>
       <Item>
         <Filename Value="..\src\PascalCommon.Crypto.pas"/>

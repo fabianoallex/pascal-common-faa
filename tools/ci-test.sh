@@ -34,3 +34,6 @@ FPC_IMAGE="$FPC_IMAGE" sh tools/test_fpc_docker.sh
 
 echo "== unit suite (i386)"
 FPC_IMAGE="$FPC_IMAGE_I386" sh tools/test_fpc_docker.sh
+
+echo "== embedded tzdb"
+sh tools/check_tzdb.sh

@@ -33,6 +33,8 @@ uses
   PascalCommon.TraceContext in '..\..\src\PascalCommon.TraceContext.pas',
   PascalCommon.Metrics in '..\..\src\PascalCommon.Metrics.pas',
   PascalCommon.Tracing in '..\..\src\PascalCommon.Tracing.pas',
+  PascalCommon.TimeZones.Data in '..\..\src\PascalCommon.TimeZones.Data.pas',
+  PascalCommon.TimeZones in '..\..\src\PascalCommon.TimeZones.pas',
   PascalJsonMapper.Json in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas',
   PascalJsonMapper.Mapper in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas',
   PascalCommon.JsonMapper.Optionals in '..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas',
@@ -56,6 +58,7 @@ uses
   PascalCommon.TraceContextTests in 'PascalCommon.TraceContextTests.pas',
   PascalCommon.MetricsTests in 'PascalCommon.MetricsTests.pas',
   PascalCommon.TracingTests in 'PascalCommon.TracingTests.pas',
+  PascalCommon.TimeZonesTests in 'PascalCommon.TimeZonesTests.pas',
   PascalCommon.JsonMapperOptionalsTests in 'PascalCommon.JsonMapperOptionalsTests.pas';
 
 var
