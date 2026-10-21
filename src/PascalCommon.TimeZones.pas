@@ -64,7 +64,14 @@ unit PascalCommon.TimeZones;
   - Leap-second files (the "right/" tree) are refused: their instants aren't
     Unix seconds.
   - A parameter that takes a source isn't const: TPcMemoryTzSource.Create
-    passed to a const interface parameter would never be freed. }
+    passed to a const interface parameter would never be freed.
+  - An instant as its zone's clock with the offset (1.23.0):
+    PcLocalIsoString gives '2027-10-31T01:00:00+01:00', then
+    '2027-10-31T01:00:00+00:00' an hour later in Europe/Lisbon, so a client
+    shows the local time without a time zone database of its own. Free
+    functions, not IPcTimeZone methods: adding to an interface would break
+    whoever implements it. From pascal-agenda-faa's LocalIso (the free slots
+    of a professional, each with its local reading). }
 
 interface
 
@@ -265,6 +272,19 @@ function PcUtcZone: IPcTimeZone;
 /// nothing about whether the zone exists.
 function PcIsWellFormedTimeZoneName(const AName: string): Boolean;
 
+/// An offset from UTC in seconds as ISO 8601 writes it: '+01:00', '-03:30',
+/// '+05:45', '+00:00' for zero. An offset with seconds (a zone's local mean
+/// time before 1900, -17762 for New York) keeps them, '-04:56:02', as
+/// Python's isoformat and java.time do: dropping them would make the text
+/// name another instant. 1.23.0.
+function PcFormatUtcOffset(AOffsetSeconds: Integer): string;
+
+/// AUtc (Unix seconds) as AZone's clock with its offset, ISO 8601:
+/// '2026-11-01T01:30:00-04:00', and '2026-11-01T01:30:00-05:00' an hour
+/// later. ToLocal(AUtc).ToString plus PcFormatUtcOffset(OffsetAt(AUtc)):
+/// the text names exactly AUtc. 1.23.0.
+function PcLocalIsoString(const AZone: IPcTimeZone; AUtc: Int64): string;
+
 implementation
 
 uses
@@ -428,6 +448,27 @@ end;
 function TPcLocalDateTime.ToString: string;
 begin
   Result := Format('%.4d-%.2d-%.2dT%.2d:%.2d:%.2d', [Year, Month, Day, Hour, Minute, Second]);
+end;
+
+function PcFormatUtcOffset(AOffsetSeconds: Integer): string;
+var
+  LAbs: Integer;
+begin
+  if AOffsetSeconds < 0 then
+    Result := '-'
+  else
+    Result := '+';
+  LAbs := Abs(AOffsetSeconds);
+  Result := Result + Format('%.2d:%.2d', [LAbs div 3600, (LAbs div 60) mod 60]);
+  if LAbs mod 60 <> 0 then
+    Result := Result + Format(':%.2d', [LAbs mod 60]);
+end;
+
+function PcLocalIsoString(const AZone: IPcTimeZone; AUtc: Int64): string;
+begin
+  if AZone = nil then
+    raise EPcTimeZoneError.Create('PcLocalIsoString: AZone is nil');
+  Result := AZone.ToLocal(AUtc).ToString + PcFormatUtcOffset(AZone.OffsetAt(AUtc));
 end;
 
 { The parsed rules of one zone }

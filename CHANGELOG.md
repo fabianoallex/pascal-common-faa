@@ -6,6 +6,21 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-10-21
+
+### Added
+
+- `PcLocalIsoString(AZone, AUtc)` (`PascalCommon.TimeZones`): an instant as its zone's clock
+  with the offset, ISO 8601 (`2027-10-31T01:00:00+01:00`, then `2027-10-31T01:00:00+00:00` an
+  hour later in Europe/Lisbon), so a client can show the local time without a time zone database
+  of its own. `PcFormatUtcOffset(ASeconds)`: `+05:45`, `-03:30`, `+00:00`; an offset with
+  seconds (a zone's local mean time, `-04:56:02` for New York before 1883) keeps them, as
+  Python's `isoformat` and java.time do, so the text still names the same instant. Free
+  functions rather than `IPcTimeZone` methods: adding to the interface would break whoever
+  implements it. From pascal-agenda-faa (`LocalIso`, the local reading of each free slot);
+  tested on both sides of transitions in Lisbon and New York, Kathmandu's +05:45, St. John's
+  -02:30/-03:30 and New York's LMT, expected texts from Python zoneinfo.
+
 ## [1.22.0] - 2026-10-20
 
 ### Added

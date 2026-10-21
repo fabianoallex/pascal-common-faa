@@ -55,6 +55,10 @@ type
     procedure Lisbon_TransitionsAndDays;
     procedure SaoPaulo_History;
     procedure SaoPaulo_DayWithoutMidnight;
+    procedure FormatUtcOffset_SignHoursMinutesSeconds;
+    procedure LocalIso_BothSidesOfATransition;
+    procedure LocalIso_QuarterAndHalfHours;
+    procedure LocalIso_LocalMeanTimeKeepsSeconds;
     procedure Kathmandu_QuarterHourOffset;
     procedure LordHowe_HalfHourDst;
     procedure Utc_Zone;
@@ -1327,6 +1331,52 @@ begin
     LStart.Free;
     LCatalog.Free;
   end;
+end;
+
+// 1.23.0. Expected texts: Python zoneinfo's isoformat (tzdata 2026b).
+procedure TTimeZonesTests.FormatUtcOffset_SignHoursMinutesSeconds;
+begin
+  TAssert.AssertEquals('+00:00', PcFormatUtcOffset(0));
+  TAssert.AssertEquals('+01:00', PcFormatUtcOffset(3600));
+  TAssert.AssertEquals('-05:00', PcFormatUtcOffset(-18000));
+  TAssert.AssertEquals('+05:45', PcFormatUtcOffset(20700));
+  TAssert.AssertEquals('-02:30', PcFormatUtcOffset(-9000));
+  TAssert.AssertEquals('-00:30', PcFormatUtcOffset(-1800));
+  TAssert.AssertEquals('+14:00', PcFormatUtcOffset(50400));
+  TAssert.AssertEquals('seconds kept', '-04:56:02', PcFormatUtcOffset(-17762));
+end;
+
+procedure TTimeZonesTests.LocalIso_BothSidesOfATransition;
+var
+  LLisbon, LNewYork: IPcTimeZone;
+begin
+  LLisbon := PcTimeZones.Find('Europe/Lisbon');
+  LNewYork := PcTimeZones.Find('America/New_York');
+  // 01:00 twice on Lisbon's last Sunday of October 2027: WEST, then WET.
+  TAssert.AssertEquals('2027-10-31T01:00:00+01:00', PcLocalIsoString(LLisbon, 1824940800));
+  TAssert.AssertEquals('2027-10-31T01:00:00+00:00', PcLocalIsoString(LLisbon, 1824944400));
+  // 01:30 twice in New York on 2026-11-01: EDT, then EST.
+  TAssert.AssertEquals('2026-11-01T01:30:00-04:00', PcLocalIsoString(LNewYork, 1793511000));
+  TAssert.AssertEquals('2026-11-01T01:30:00-05:00', PcLocalIsoString(LNewYork, 1793514600));
+  TAssert.AssertEquals('1970-01-01T00:00:00+00:00', PcLocalIsoString(PcUtcZone, 0));
+end;
+
+procedure TTimeZonesTests.LocalIso_QuarterAndHalfHours;
+var
+  LStJohns: IPcTimeZone;
+begin
+  TAssert.AssertEquals('2026-11-02T10:45:00+05:45',
+    PcLocalIsoString(PcTimeZones.Find('Asia/Kathmandu'), 1793595600));
+  LStJohns := PcTimeZones.Find('America/St_Johns');
+  TAssert.AssertEquals('2026-07-01T09:30:00-02:30', PcLocalIsoString(LStJohns, 1782907200));
+  TAssert.AssertEquals('2026-01-01T08:30:00-03:30', PcLocalIsoString(LStJohns, 1767268800));
+end;
+
+procedure TTimeZonesTests.LocalIso_LocalMeanTimeKeepsSeconds;
+begin
+  // Before New York's first transition: its LMT, -04:56:02.
+  TAssert.AssertEquals('1880-01-01T07:03:58-04:56:02',
+    PcLocalIsoString(PcTimeZones.Find('America/New_York'), -2840097600));
 end;
 
 initialization
