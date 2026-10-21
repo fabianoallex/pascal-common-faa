@@ -15,6 +15,16 @@ unit PascalCommon.Crypto;
   section 5 without padding (as JWT uses it). Checked against the FIPS 180,
   RFC 4231 and RFC 4648 vectors in PascalCommon.CryptoTests.
 
+  PcBase64UrlDecodeStrict (1.24.0) reads only what PcBase64UrlEncode
+  writes. The lenient PcBase64UrlDecode accepts padding and ignores the
+  bits after the last byte (RFC 4648 section 3.5 allows either), so one
+  byte string has several texts: 32 bytes are 43 characters whose last
+  carries 4 bits, and "...A" and "...B" decode alike (found by
+  pascal-agenda-faa's signed links on its Linux run). A signature or token
+  checked as bytes then verifies under more than one spelling; the strict
+  form gives each one text. The lenient one stays as it was (a behavior
+  change within 1.x would break the versioning rule).
+
   PBKDF2-HMAC-SHA256 (RFC 8018) came in 1.18.0, for password hashing (first
   user: pascal-agenda-faa). It lives here, not in the consumer, because the
   fast form needs SHA-256's compression function: HMAC's inner and outer
@@ -49,6 +59,10 @@ function PcBase64UrlEncode(const ABytes: TBytes): string;
 /// Accepts input with or without padding. Returns False on any character
 /// outside the Base64url alphabet or an impossible length.
 function PcBase64UrlDecode(const AText: string; out ABytes: TBytes): Boolean;
+/// Only the text PcBase64UrlEncode writes (1.24.0): no padding, and the
+/// bits after the last byte zero, so a byte string has one text. False
+/// otherwise, ABytes nil. For signatures and tokens.
+function PcBase64UrlDecodeStrict(const AText: string; out ABytes: TBytes): Boolean;
 
 /// Compares in time independent of where the first difference is (for
 /// signatures).
@@ -299,6 +313,14 @@ begin
     end;
   end;
   Result := True;
+end;
+
+function PcBase64UrlDecodeStrict(const AText: string; out ABytes: TBytes): Boolean;
+begin
+  // Encoding again is the definition: the one text of these bytes.
+  Result := PcBase64UrlDecode(AText, ABytes) and (PcBase64UrlEncode(ABytes) = AText);
+  if not Result then
+    ABytes := nil;
 end;
 
 function PcSameBytes(const A, B: TBytes): Boolean;

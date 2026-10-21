@@ -41,6 +41,8 @@ type
     procedure Base64Url_UrlAlphabet;
     procedure Base64Url_DecodeRoundTrip;
     procedure Base64Url_DecodeRejectsInvalid;
+    procedure Base64Url_StrictReadsTheEncodersText;
+    procedure Base64Url_StrictRefusesOtherSpellings;
     procedure SameBytes;
     procedure Pbkdf2_Rfc7914;
     procedure Pbkdf2_PasswordSaltVectors;
@@ -159,6 +161,14 @@ begin
   end;
 end;
 
+// The character after AChar in the Base64url alphabet.
+function NextBase64UrlChar(AChar: Char): Char;
+const
+  ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+begin
+  Result := ALPHABET[Pos(AChar, ALPHABET) + 1];
+end;
+
 function Encode(const S: string): string;
 begin
   Result := PcBase64UrlEncode(Utf8(S));
@@ -268,6 +278,54 @@ begin
   TAssert.AssertFalse('standard alphabet', PcBase64UrlDecode('ab+/', LBytes));
   TAssert.AssertFalse('space', PcBase64UrlDecode('Zm 9v', LBytes));
   TAssert.AssertFalse('4n+1 characters', PcBase64UrlDecode('Zm9vY', LBytes));
+end;
+
+procedure TCryptoTests.Base64Url_StrictReadsTheEncodersText;
+var
+  LBytes: TBytes;
+  I: Integer;
+begin
+  for I := 0 to 6 do
+  begin
+    TAssert.AssertTrue(PcBase64UrlDecodeStrict(Encode(Copy('foobar', 1, I)), LBytes));
+    TAssert.AssertEquals(Copy('foobar', 1, I), Utf8Text(LBytes));
+  end;
+  // 32 bytes, as an HMAC-SHA256: 43 characters. (Not LBytes on both sides
+  // of one call: FPC clears an out argument before it reads the others.)
+  TAssert.AssertTrue('a digest', PcBase64UrlDecodeStrict(
+    PcBase64UrlEncode(PcDigestToBytes(PcSha256(Utf8('abc')))), LBytes));
+  TAssert.AssertTrue('a digest: its bytes', PcSameBytes(LBytes,
+    PcDigestToBytes(PcSha256(Utf8('abc')))));
+end;
+
+procedure TCryptoTests.Base64Url_StrictRefusesOtherSpellings;
+var
+  LBytes: TBytes;
+  LText: string;
+begin
+  // "Zg" is "f"; "Zh" differs only in the 4 bits after the byte, which the
+  // lenient decoder drops.
+  TAssert.AssertTrue('lenient: Zh', PcBase64UrlDecode('Zh', LBytes));
+  TAssert.AssertEquals('lenient: Zh is f', 'f', Utf8Text(LBytes));
+  TAssert.AssertFalse('strict: Zh', PcBase64UrlDecodeStrict('Zh', LBytes));
+  TAssert.AssertTrue('strict: nil after a refusal', LBytes = nil);
+  // "Zm8" is "fo"; "Zm9" differs only in the 2 bits after the bytes.
+  TAssert.AssertTrue('lenient: Zm9', PcBase64UrlDecode('Zm9', LBytes));
+  TAssert.AssertEquals('lenient: Zm9 is fo', 'fo', Utf8Text(LBytes));
+  TAssert.AssertFalse('strict: Zm9', PcBase64UrlDecodeStrict('Zm9', LBytes));
+  TAssert.AssertTrue('strict: Zm8', PcBase64UrlDecodeStrict('Zm8', LBytes));
+  TAssert.AssertFalse('strict: padding', PcBase64UrlDecodeStrict('Zg==', LBytes));
+  TAssert.AssertFalse('strict: standard alphabet', PcBase64UrlDecodeStrict('ab+/', LBytes));
+  TAssert.AssertFalse('strict: 4n+1 characters', PcBase64UrlDecodeStrict('Zm9vY', LBytes));
+  // A digest's last character carries 4 bits (SHA-256 of "abc" ends in
+  // "Fa0"): the next character of the alphabet decodes to the same bytes.
+  LText := PcBase64UrlEncode(PcDigestToBytes(PcSha256(Utf8('abc'))));
+  TAssert.AssertTrue('lenient: the last character + 1',
+    PcBase64UrlDecode(Copy(LText, 1, 42) + NextBase64UrlChar(LText[43]), LBytes));
+  TAssert.AssertTrue('lenient: the same bytes',
+    PcSameBytes(LBytes, PcDigestToBytes(PcSha256(Utf8('abc')))));
+  TAssert.AssertFalse('strict: the last character + 1',
+    PcBase64UrlDecodeStrict(Copy(LText, 1, 42) + NextBase64UrlChar(LText[43]), LBytes));
 end;
 
 procedure TCryptoTests.SameBytes;

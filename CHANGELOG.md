@@ -6,6 +6,18 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-10-21
+
+### Added
+
+- `PcBase64UrlDecodeStrict` (`PascalCommon.Crypto`): reads only the text `PcBase64UrlEncode`
+  writes (no padding, the bits after the last byte zero), so a byte string has one text. The
+  lenient `PcBase64UrlDecode`, unchanged, accepts padding and ignores those bits (RFC 4648
+  section 3.5 allows both): 32 bytes are 43 characters whose last carries 4 bits, so `...A` and
+  `...B` decode to the same signature. Found by pascal-agenda-faa's signed links on its Linux
+  run (a link with its last character changed still verified); pascal-api-infra-faa's JWT had
+  the same. For signatures and tokens.
+
 ## [1.23.0] - 2026-10-21
 
 ### Added
