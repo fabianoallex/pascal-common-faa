@@ -6,6 +6,42 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.26.0] - 2026-10-30
+
+### Added
+
+From pascal-agenda-faa, promoted at the user's choice (its `docs/design.md`, "M7: design",
+decisions 1 to 4), unchanged but for the names; each had two uses there.
+
+- `PascalCommon.Passwords`: `TPcPasswords.Hash`, `Verify`, `NeedsRehash` (and `HashWithSalt` for
+  tests). PBKDF2-HMAC-SHA256 with a 16-byte random salt, stored as
+  `$pbkdf2-sha256$i=<iterations>$<salt>$<hash>` (Base64url), the password as UTF-8. `Verify`
+  compares in constant time and answers False for anything it can't read, never raising on
+  stored data; `NeedsRehash` says when a stored hash used fewer iterations than now. Ceilings:
+  `PC_PASSWORD_MAX_BYTES` (1024) and `PC_PASSWORD_MAX_ITERATIONS` (10,000,000) for a stored
+  hash; `PC_PASSWORD_DEFAULT_ITERATIONS` is 210,000 (about 0.26 s in pure Pascal), below
+  OWASP's 600,000 on purpose. `EPcPasswordError` for an empty or too long password. From
+  `Agenda.Passwords`, with its tests (stored forms from Python's `hashlib`).
+- `PascalCommon.StopSignal`: a console program's stop request (Ctrl+C, Ctrl+Break, the console
+  closing on Windows; SIGINT and SIGTERM on FPC/Unix): `PcStopSignalInstall`/`Uninstall`,
+  `PcStopRequested`, `PcRequestStop`, `PcStopSleep` (returns early on a stop) and
+  `PcStopSignalDone` (the console-close handler waits for it, at most 4.5 s).
+  `PcBlockStopSignals`, from the application's api program: blocks SIGINT and SIGTERM on the
+  thread that accepts, so a SIGTERM doesn't interrupt FPC's `accept` and make the server listen
+  again (gotcha 14); nothing outside FPC/Unix. `tools/test_stop_signal_docker.sh`, run by
+  `tools/ci-test.sh`, sends a real SIGTERM to a program shaped like a server
+  (`tests/Signals`). From `Agenda.StopSignal`.
+- `PascalCommon.WinHeap`: Delphi on Windows, the program's memory on the Windows process heap
+  instead of the RTL's manager, whose single lock for medium blocks kept a multi-threaded
+  program at one thread's throughput (pascal-db-faa gotcha 55). **It must be the first unit of
+  the program's `uses`**; otherwise it leaves the RTL's manager alone, and
+  `PcMemoryManagerName` says which one runs. `MEMORY_MANAGER=default` keeps the RTL's.
+  Nothing on FPC. From `Agenda.WinHeap`.
+- `PcPercentEncode` (`PascalCommon.Utf8`): RFC 3986 percent-encoding over the UTF-8 bytes,
+  every byte but `A-Z a-z 0-9 - . _ ~` as `%XX` (a space is `%20`), for a query value or a path
+  segment. From pascal-agenda-faa's `ApiQueryEscape`, the same byte for byte as
+  pascal-api-infra-faa's private `McpUrlEncode`.
+
 ## [1.25.0] - 2026-10-30
 
 ### Added

@@ -281,3 +281,21 @@ fractional literal in an expression: `const MAX_PRICE: Currency = 100000.5;`. Th
 tests do. pascal-jsonmapper-faa's Currency path never meets it (it builds the units from the
 text). See also the skill's `rtl-gotchas.md` (`Currency(integer)` reinterprets the bits on FPC
 Linux).
+
+## 14. FPC on Unix: a SIGTERM makes a server listen again instead of stopping
+
+**Symptom.** An FPC 3.2.2 server on Linux (Horse on fphttpapp) got a SIGTERM and kept running in
+`accept`, with the connections it had accepted in CLOSE_WAIT; the stop handler had run. Found in
+pascal-agenda-faa ("M5: under load" in its `docs/design.md`).
+
+**Cause.** A signal sent to the process goes to any thread that doesn't block it, usually the
+main thread, which sat in `accept`. The call returns with EINTR; FPC's web application takes
+that for an error and starts listening again. Reproduced here with
+`tests/Signals/PascalCommonStopSignalProbe.lpr` (`select` standing in for `accept`): without the
+block, `main interrupted: yes`.
+
+**Fix.** `PcBlockStopSignals` (`PascalCommon.StopSignal`, 1.26.0) on the thread that accepts,
+**after** starting the thread that watches `PcStopRequested`: a thread inherits the signal mask
+of the thread that creates it, so a watcher started after the block would block the signals
+too, and nobody would get them. `tools/test_stop_signal_docker.sh` (run by `tools/ci-test.sh`)
+sends a real SIGTERM to a program built that way.

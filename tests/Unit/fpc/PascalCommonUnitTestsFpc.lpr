@@ -45,6 +45,9 @@ uses
   PascalCommon.MetricsTests,
   PascalCommon.TracingTests,
   PascalCommon.TimeZonesTests,
+  PascalCommon.PasswordsTests,
+  PascalCommon.StopSignalTests,
+  PascalCommon.WinHeapTests,
   PascalCommon.JsonMapperOptionalsTests;
 
 var

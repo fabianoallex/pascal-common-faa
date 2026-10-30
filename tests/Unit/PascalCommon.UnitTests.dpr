@@ -35,6 +35,10 @@ uses
   PascalCommon.Tracing in '..\..\src\PascalCommon.Tracing.pas',
   PascalCommon.TimeZones.Data in '..\..\src\PascalCommon.TimeZones.Data.pas',
   PascalCommon.TimeZones in '..\..\src\PascalCommon.TimeZones.pas',
+  PascalCommon.Passwords in '..\..\src\PascalCommon.Passwords.pas',
+  PascalCommon.StopSignal in '..\..\src\PascalCommon.StopSignal.pas',
+  // Late on purpose: it must not install here (see its test).
+  PascalCommon.WinHeap in '..\..\src\PascalCommon.WinHeap.pas',
   PascalJsonMapper.Json in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas',
   PascalJsonMapper.Mapper in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas',
   PascalCommon.JsonMapper.Optionals in '..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas',
@@ -59,6 +63,9 @@ uses
   PascalCommon.MetricsTests in 'PascalCommon.MetricsTests.pas',
   PascalCommon.TracingTests in 'PascalCommon.TracingTests.pas',
   PascalCommon.TimeZonesTests in 'PascalCommon.TimeZonesTests.pas',
+  PascalCommon.PasswordsTests in 'PascalCommon.PasswordsTests.pas',
+  PascalCommon.StopSignalTests in 'PascalCommon.StopSignalTests.pas',
+  PascalCommon.WinHeapTests in 'PascalCommon.WinHeapTests.pas',
   PascalCommon.JsonMapperOptionalsTests in 'PascalCommon.JsonMapperOptionalsTests.pas';
 
 var

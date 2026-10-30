@@ -43,6 +43,10 @@ type
     procedure ValidBoundaries_AreAccepted;
     procedure ValidWithAndWithoutBom_StaysTrue;
     procedure InvalidBytes_AreRefusedOutsideUtf8CodePageOnFpc;
+    procedure PercentEncode_Unreserved_AreKept;
+    procedure PercentEncode_Reserved_AreEncoded;
+    procedure PercentEncode_EveryAsciiByte;
+    procedure PercentEncode_NonAscii_AsUtf8Bytes;
   end;
 
 implementation
@@ -281,6 +285,56 @@ begin
   end;
   {$ENDIF}
   TAssert.AssertTrue('valid UTF-8 whatever the code page', LValid);
+end;
+
+const
+  // Typed constants: FPC warns (4104/4105) on a non-ASCII literal in an
+  // expression.
+  JOAO: string = 'João';
+  ARROW_EMOJI: string = 'São → 😀';
+
+procedure TUtf8Tests.PercentEncode_Unreserved_AreKept;
+begin
+  TAssert.AssertEquals('', PcPercentEncode(''));
+  TAssert.AssertEquals('a-Z_0.9~', PcPercentEncode('a-Z_0.9~'));
+  TAssert.AssertEquals('ABCXYZabcxyz0189', PcPercentEncode('ABCXYZabcxyz0189'));
+end;
+
+procedure TUtf8Tests.PercentEncode_Reserved_AreEncoded;
+begin
+  // A space is %20, never '+'; '+' itself is encoded, and so is '%'.
+  TAssert.AssertEquals('a%20b%26c%3Dd%2F%3F%2B', PcPercentEncode('a b&c=d/?+'));
+  TAssert.AssertEquals('100%25', PcPercentEncode('100%'));
+  TAssert.AssertEquals('%2A%27%28%29%21%40%23%24%2C%3B%3A%5B%5D',
+    PcPercentEncode('*''()!@#$,;:[]'));
+  TAssert.AssertEquals('%00%0D%0A%09%7F', PcPercentEncode(#0#13#10#9#127));
+end;
+
+procedure TUtf8Tests.PercentEncode_EveryAsciiByte;
+const
+  HEX = '0123456789ABCDEF';
+var
+  I: Integer;
+  LChar: Char;
+  LExpected: string;
+begin
+  for I := 0 to 127 do
+  begin
+    LChar := Char(I);
+    if CharInSet(LChar, ['A'..'Z', 'a'..'z', '0'..'9', '-', '.', '_', '~']) then
+      LExpected := LChar
+    else
+      LExpected := '%' + HEX[(I shr 4) + 1] + HEX[(I and $F) + 1];
+    TAssert.AssertEquals('byte ' + IntToStr(I), LExpected, PcPercentEncode(LChar));
+  end;
+end;
+
+procedure TUtf8Tests.PercentEncode_NonAscii_AsUtf8Bytes;
+begin
+  // Each UTF-8 byte, upper-case hex: ã is C3 A3, → is E2 86 92, and an
+  // emoji outside the BMP (a surrogate pair on Delphi) is F0 9F 98 80.
+  TAssert.AssertEquals('Jo%C3%A3o', PcPercentEncode(JOAO));
+  TAssert.AssertEquals('S%C3%A3o%20%E2%86%92%20%F0%9F%98%80', PcPercentEncode(ARROW_EMOJI));
 end;
 
 initialization

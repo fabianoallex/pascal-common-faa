@@ -30,7 +30,15 @@ unit PascalCommon.Utf8;
   made Delphi's TEncoding.UTF8 raise EEncodingError, with no file name, and on
   FPC passed silently as text full of #0 (found by pascal-agenda-faa with a
   .env, 2026-10-30). PcIsValidUtf8 is public so a caller can tell "not UTF-8"
-  from "UTF-8 that this FPC code page can't hold" in its own message. }
+  from "UTF-8 that this FPC code page can't hold" in its own message.
+
+  PcPercentEncode (1.26.0) is RFC 3986's percent-encoding over the UTF-8
+  bytes: every byte but the unreserved characters (A-Z a-z 0-9 - . _ ~)
+  becomes %XX, upper-case hex, so a space is %20 (never "+") and "São" is
+  S%C3%A3o, the same on both compilers. For a query value or a path
+  segment. It came from pascal-agenda-faa (ApiQueryEscape, its desktop
+  client's query strings; "M7: design", decision 4), the same byte for byte
+  as pascal-api-infra-faa's private McpUrlEncode, which is to call it. }
 
 interface
 
@@ -58,6 +66,12 @@ function PcIsValidUtf8(const ABytes: TBytes): Boolean;
 /// PaStringToUtf8Bytes (PascalApi.Text), the same body, for passwords given
 /// to PcPbkdf2HmacSha256 and any other text that is hashed.
 function PcStringToUtf8Bytes(const AText: string): TBytes;
+
+/// AText percent-encoded as RFC 3986 says (1.26.0): its UTF-8 bytes, each
+/// one outside the unreserved characters (A-Z a-z 0-9 - . _ ~) as %XX with
+/// upper-case hex. 'a b&c' gives 'a%20b%26c', 'João' gives 'Jo%C3%A3o'.
+/// For a query name or value, or a path segment ('/' is encoded too).
+function PcPercentEncode(const AText: string): string;
 
 implementation
 
@@ -176,6 +190,40 @@ begin
   {$ELSE}
   Result := TEncoding.UTF8.GetBytes(AText);
   {$ENDIF}
+end;
+
+function PcPercentEncode(const AText: string): string;
+const
+  HEX = '0123456789ABCDEF';
+var
+  LBytes: TBytes;
+  I, LLen: Integer;
+  B: Byte;
+begin
+  Result := '';
+  LBytes := PcStringToUtf8Bytes(AText);
+  // At most three characters a byte, all ASCII: one allocation.
+  SetLength(Result, Length(LBytes) * 3);
+  LLen := 0;
+  for I := 0 to High(LBytes) do
+  begin
+    B := LBytes[I];
+    if ((B >= Ord('A')) and (B <= Ord('Z'))) or ((B >= Ord('a')) and (B <= Ord('z'))) or
+      ((B >= Ord('0')) and (B <= Ord('9'))) or (B = Ord('-')) or (B = Ord('.')) or
+      (B = Ord('_')) or (B = Ord('~')) then
+    begin
+      Inc(LLen);
+      Result[LLen] := Char(B);
+    end
+    else
+    begin
+      Result[LLen + 1] := '%';
+      Result[LLen + 2] := HEX[(B shr 4) + 1];
+      Result[LLen + 3] := HEX[(B and $F) + 1];
+      Inc(LLen, 3);
+    end;
+  end;
+  SetLength(Result, LLen);
 end;
 
 end.

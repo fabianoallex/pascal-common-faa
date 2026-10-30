@@ -26,14 +26,17 @@ as ARM.
 | `PascalCommon.SystemContext` | Replaceable wall clock (`TClock`), monotonic clock (`TTicker`) and wait (`TSleep`), so tests can run time-dependent code without real waits |
 | `PascalCommon.ClockCache` | `TClockCache<K, V>`: a thread-safe, fixed-size cache (G-Clock eviction) with predictable latency |
 | `PascalCommon.SafeLog` | `SafeWriteln`: a console `Writeln` safe to call from any thread, with one lock for the whole process, and a no-op in a binary without a console (service, GUI). `PcSetSafeLogUtf8(True)` makes it write UTF-8 to a file or a pipe and UTF-16 to a Windows console, the same on both compilers |
-| `PascalCommon.Utf8` | `PcTryUtf8BytesToString`: UTF-8 bytes to a string that refuses bytes that aren't UTF-8 (UTF-16 included, 1.25.0) and, on FPC, to corrupt non-ASCII text when the process code page isn't UTF-8; `PcIsValidUtf8`; `PcStringToUtf8Bytes`, the other way |
+| `PascalCommon.Utf8` | `PcTryUtf8BytesToString`: UTF-8 bytes to a string that refuses bytes that aren't UTF-8 (UTF-16 included, 1.25.0) and, on FPC, to corrupt non-ASCII text when the process code page isn't UTF-8; `PcIsValidUtf8`; `PcStringToUtf8Bytes`, the other way; `PcPercentEncode` (1.26.0): RFC 3986 percent-encoding of the UTF-8 bytes (`'João'` → `'Jo%C3%A3o'`, a space `%20`), for a query value or a path segment |
 | `PascalCommon.Text` | `PcUpperCase`, `PcLowerCase`: upper and lower case that map every Unicode letter on both compilers, whatever the process locale (`AnsiUpperCase` on FPC/Linux depends on it; gotcha 10). `PcCharCount` (1.21.0): characters as code points, the same on both compilers. `PcFoldForSearch` (1.20.0): a search key, lower case with Latin accents removed and blanks collapsed (`'São  CONCEIÇÃO'` → `'sao conceicao'`), to store next to a name and compare with what the user types, the same on every database |
 | `PascalCommon.Crypto` | `PcSha256`, `PcHmacSha256`, `PcBase64UrlEncode`/`Decode` (and `DecodeStrict`, 1.24.0: only the encoder's text, for signatures), `PcBytesToHex`, `PcSameBytes` (constant time), `PcPbkdf2HmacSha256` (password hashing, HMAC's states computed once): FPC 3.2.2 has no SHA-256; checked against FIPS 180, RFC 4231, RFC 4648 and RFC 7914 |
 | `PascalCommon.AesGcm` | `PcAesGcmEncrypt`, `PcAesGcmDecrypt`: AES-128/192/256-GCM (authenticated encryption with additional data), pure Pascal, checked against NIST and OpenSSL vectors; for secrets at rest (the S-box is a table lookup: see the unit) |
+| `PascalCommon.Passwords` | (1.26.0) `TPcPasswords.Hash`, `Verify`, `NeedsRehash`: PBKDF2-HMAC-SHA256 with a random salt, stored as `$pbkdf2-sha256$i=210000$<salt>$<hash>` so the cost can grow later; `Verify` in constant time and never raising on what a database holds; ceilings on the password's length and a stored hash's iterations |
 | `PascalCommon.Random` | `PcFillRandom`, `PcRandomBytes`: random bytes from the operating system's cryptographic source (BCryptGenRandom, `/dev/urandom`), for secrets and ids; `EPcRandom` when it fails, never a fallback to `Random` |
 | `PascalCommon.TraceContext` | W3C Trace Context: new trace and span ids (`PcNewTraceId`, `PcNewSpanId`, from the OS random source), validation, and `traceparent`/`tracestate` parse and format (`PcTryParseTraceParent`, `PcFormatTraceParent`, `PcResolveTraceState`) |
 | `PascalCommon.Metrics` | Counter, up-down counter, gauge and histogram with labels, a registry (`PcMetrics` is the process-wide one), and the Prometheus text exposition (`PcPrometheusText`). OpenTelemetry names and units (`http.server.request.duration`, `s`) become Prometheus names (`http_server_request_duration_seconds`); recording is lock-free on a series |
 | `PascalCommon.Tracing` | Spans: `TPcTracing.StartSpan` (a child of the thread's current span), `StartSpanWith`, `StartSpanFromParent` (from a `traceparent` header), `StartDetachedSpan` (never the current span, finished on any thread) with `StartChildSpan` (an explicit parent), attributes and status; parent-based sampling with a ratio; a batch processor that hands finished spans to an `IPcSpanExporter` on its own thread. The exporter (OTLP over HTTP) lives in pascal-api-infra-faa |
+| `PascalCommon.StopSignal` | (1.26.0) A console program's stop request: Ctrl+C, Ctrl+Break and the console closing on Windows, SIGINT and SIGTERM (`docker stop`, systemd) on FPC/Unix, as a flag (`PcStopRequested`) and a sleep that ends on it (`PcStopSleep`). `PcBlockStopSignals` for a server's accepting thread on FPC/Unix (gotcha 14) |
+| `PascalCommon.WinHeap` | (1.26.0) Delphi on Windows: the program's memory on the Windows process heap, which scales with threads where the RTL's manager doesn't (pascal-db-faa gotcha 55). **First unit of the program**, or it does nothing; `PcMemoryManagerName` says which manager runs. Nothing on FPC |
 | `PascalCommon.Optionals` | Optional and nullable types: `IOptXxx` ("was it provided?"), `INullXxx` ("is it null?") and `IOptNullXxx` (both), for String, Integer, Int64, Single, Double, Currency, TDateTime, Boolean and TGUID, with `TOptionals.Safe`, string normalizers that keep the state (`Trim`, `Upper`, `Lower`, `NullIfEmpty`, `UndefinedIfEmpty`), and `Map`/`Normalize` with your own function or normalizer for every type, all in `TOptionals` and as chainable methods; `ValueOr(default)` on every one (1.19.0). `TOptNullBoolean.From` returns the interface `IOptNullBoolean`; for an `IOptBoolean` or `INullBoolean` use `TrueValue`/`FalseValue` |
 | `PascalCommon.Normalizers` | Value normalizers that don't depend on the optionals: a function type and a normalizer interface per type (`TPcStringFunc`/`IPcStringNormalizer`...), and one factory class per type (`TPcStringNormalizers`, `TPcIntegerNormalizers`...), to find them by completion and to inherit with your own: `FromFunc`, `Chain`, and `Trim`/`Upper`/`Lower` for string. The same normalizer works on a plain value (`N.Apply(S)`) and on an optional (`X.Normalize(N)`) |
 | `PascalCommon.Validators` | (1.21.0) Checks that refuse a value and change nothing, the normalizers' partner: a validator interface and a factory per type (`TPcStringValidators`: `Required`, `MinLength`, `MaxLength`, `OneOf`; numbers and dates: `Min`, `Max`, `Range`, `MultipleOf`, `MaxDecimals`), `FromFunc`, `All`; `TPcValidation` collects every failing field (an optional checked only when it came) and raises them together as `EPcValidationError`; messages in English and Portuguese |
@@ -246,6 +249,52 @@ Pass `gapStartOfAfter`, `gapRaise`, `overlapLater` or `overlapRaise` to `ToUtc` 
 or call `Map` to see every answer. Design, measurements and the update policy for the embedded
 data: [`docs/timezones-design.md`](docs/timezones-design.md).
 
+### Stopping a server cleanly
+
+```pascal
+program MyServer;
+
+uses
+  {$IFDEF UNIX}cthreads,{$ENDIF}
+  PascalCommon.WinHeap,  // Delphi/Windows: first unit, before anything allocates
+  SysUtils, Classes, PascalCommon.StopSignal;
+
+type
+  TStopWatcher = class(TThread)
+  protected
+    procedure Execute; override;
+  end;
+
+procedure TStopWatcher.Execute;
+begin
+  while not Terminated and not PcStopRequested do
+    PcStopSleep(200);
+  if not Terminated then
+    StopTheServer;  // makes Listen below return
+end;
+
+var
+  LWatcher: TStopWatcher;
+begin
+  WriteLn('memory: ', PcMemoryManagerName);
+  PcStopSignalInstall;
+  LWatcher := TStopWatcher.Create(False);
+  PcBlockStopSignals;  // after the watcher: it must still receive SIGTERM
+  try
+    Listen;            // blocks in accept until StopTheServer
+  finally
+    LWatcher.Terminate;
+    LWatcher.WaitFor;
+    LWatcher.Free;
+    PcStopSignalDone;
+    PcStopSignalUninstall;
+  end;
+end.
+```
+
+A worker without a server needs only the loop: `while not PcStopRequested do begin DoOnePass;
+PcStopSleep(5000); end;`.
+
 ## Installing
 
 **Lazarus:** open and install `packages/pascal_common_faa.lpk`. For the JSON bridge, also
@@ -297,7 +346,8 @@ DUnitX on Delphi and FPCUnit on FPC, with the same test bodies: the FPCUnit fixt
 from the DUnitX ones by `tools/gen_fpc_mirror.py`. Acceptance is every test green and 0 leaks.
 
 - FPC on Windows: `sh tools/test_fpc.sh`
-- FPC on Linux, x86_64 and i386, in Docker (what CI runs): `sh tools/ci-test.sh`
+- FPC on Linux, x86_64 and i386, in Docker (what CI runs): `sh tools/ci-test.sh` (it also sends a real
+  SIGTERM to `tests/Signals`' probe: `tools/test_stop_signal_docker.sh`)
 - Delphi: open `PascalCommon.groupproj`, build and run `tests/Unit/PascalCommon.UnitTests.dproj`
   (Win32 and Win64)
 

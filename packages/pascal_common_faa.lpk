@@ -13,9 +13,9 @@
         <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
       </SearchPaths>
     </CompilerOptions>
-    <Description Value="Base library shared by the *-faa libraries (Delphi and Free Pascal/Lazarus, dual-compiler): optional/nullable types, portable atomics and monotonic time, a monitor and a thread pool, a clock/sleep context, a bounded cache, a thread-safe console Writeln, W3C trace context ids, metrics with a Prometheus writer, and spans with a batch processor."/>
+    <Description Value="Base library shared by the *-faa libraries (Delphi and Free Pascal/Lazarus, dual-compiler): optional/nullable types, portable atomics and monotonic time, a monitor and a thread pool, a clock/sleep context, a bounded cache, a thread-safe console Writeln, W3C trace context ids, metrics with a Prometheus writer, spans with a batch processor, password hashing and a console stop request."/>
     <License Value="MIT"/>
-    <Version Major="1" Minor="25"/>
+    <Version Major="1" Minor="26"/>
     <Files>
       <Item>
         <Filename Value="..\src\pascalcommon.inc"/>
@@ -96,6 +96,18 @@
       <Item>
         <Filename Value="..\src\PascalCommon.Tracing.pas"/>
         <UnitName Value="PascalCommon.Tracing"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Passwords.pas"/>
+        <UnitName Value="PascalCommon.Passwords"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.StopSignal.pas"/>
+        <UnitName Value="PascalCommon.StopSignal"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.WinHeap.pas"/>
+        <UnitName Value="PascalCommon.WinHeap"/>
       </Item>
     </Files>
     <RequiredPkgs>
