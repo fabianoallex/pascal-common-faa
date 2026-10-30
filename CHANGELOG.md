@@ -6,6 +6,26 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-10-30
+
+### Added
+
+- `PcIsValidUtf8` (`PascalCommon.Utf8`): whether bytes, after an optional UTF-8 BOM, are
+  well-formed UTF-8 (RFC 3629, Unicode table 3-7: no stray continuation byte, no overlong form,
+  no surrogate, nothing above U+10FFFF, no sequence cut at the end), the same on both compilers
+  and in any code page. A caller uses it to tell "not UTF-8" from "UTF-8 this FPC code page
+  can't hold" in its own message.
+
+### Fixed
+
+- `PcTryUtf8BytesToString` returns False for bytes that aren't UTF-8, on both compilers. Before,
+  Delphi's `TEncoding.UTF8` raised `EEncodingError` from a "Try" function, and FPC in a UTF-8
+  code page validated nothing: a `.env` saved as UTF-16 LE with a BOM (what PowerShell 5.1's
+  `>` writes) stopped a VCL program at startup with "No mapping for the Unicode character..."
+  and no file name, and on FPC loaded silently as keys full of `#0`. Found by pascal-agenda-faa
+  (2026-10-30). Valid UTF-8, with or without a BOM, gives the same text as before; the only
+  observable change is invalid input, which now has the answer the function documented.
+
 ## [1.24.0] - 2026-10-21
 
 ### Added
