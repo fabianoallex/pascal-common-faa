@@ -136,6 +136,8 @@
         <DCCReference Include="..\..\src\PascalCommon.Passwords.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.StopSignal.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.WinHeap.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.Transport.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.Transport.Tcp.pas"/>
         <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas"/>
         <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas"/>
         <DCCReference Include="..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas"/>
@@ -163,6 +165,8 @@
         <DCCReference Include="PascalCommon.PasswordsTests.pas"/>
         <DCCReference Include="PascalCommon.StopSignalTests.pas"/>
         <DCCReference Include="PascalCommon.WinHeapTests.pas"/>
+        <DCCReference Include="PascalCommon.TransportTests.pas"/>
+        <DCCReference Include="PascalCommon.TcpTransportTests.pas"/>
         <DCCReference Include="PascalCommon.JsonMapperOptionalsTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

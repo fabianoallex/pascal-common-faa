@@ -48,6 +48,8 @@ uses
   PascalCommon.PasswordsTests,
   PascalCommon.StopSignalTests,
   PascalCommon.WinHeapTests,
+  PascalCommon.TransportTests,
+  PascalCommon.TcpTransportTests,
   PascalCommon.JsonMapperOptionalsTests;
 
 var

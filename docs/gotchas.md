@@ -299,3 +299,23 @@ block, `main interrupted: yes`.
 of the thread that creates it, so a watcher started after the block would block the signals
 too, and nobody would get them. `tools/test_stop_signal_docker.sh` (run by `tools/ci-test.sh`)
 sends a real SIGTERM to a program built that way.
+
+## 15. POSIX: an IO deadline that never fires on a large write
+
+**Symptom.** On Linux, `SetIoDeadline_WriteTimesOutWhenThePeerStopsReading` (the peer stops
+reading, the writer has a 300 ms deadline) hung the whole suite instead of raising
+`EPcTransportTimeout`. The writing thread sat in the kernel in `wait_woken` (read from
+`/proc/<pid>/task/*/wchan`). Found 2026-11-01 in `PascalCommon.Transport.Posix`, which came from
+pascal-pipes-faa's `Pipes.Transport.Posix` with the same code. On Windows the same test passed.
+
+**Cause.** The endpoint waits with `poll` before each `send`, then sends on a socket left in
+blocking mode. `poll` reports `POLLOUT` as soon as a little room frees up, but a blocking `send`
+of a 4 MB buffer waits inside the kernel until the whole buffer is sent. After the first
+`POLLOUT` the deadline is never looked at again. The WinSock backend doesn't have it: its socket
+is non-blocking (`WSAEventSelect`), so `send` returns what fit.
+
+**Fix.** `recv` and `send` pass `MSG_DONTWAIT`: each call after the poll does only what fits
+right now, and `EAGAIN` goes back to the poll and its deadline. The socket stays in blocking
+mode for anyone using the fd directly. The test now writes on its own thread and waits for it
+with a deadline, so a regression ends as a failure, not a hang. pascal-pipes-faa gets the fix by
+moving to this unit (step 2 of `docs/transport-design.md`).

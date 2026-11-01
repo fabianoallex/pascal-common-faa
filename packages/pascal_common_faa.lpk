@@ -109,6 +109,18 @@
         <Filename Value="..\src\PascalCommon.WinHeap.pas"/>
         <UnitName Value="PascalCommon.WinHeap"/>
       </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Transport.pas"/>
+        <UnitName Value="PascalCommon.Transport"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Transport.Posix.pas"/>
+        <UnitName Value="PascalCommon.Transport.Posix"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Transport.Tcp.pas"/>
+        <UnitName Value="PascalCommon.Transport.Tcp"/>
+      </Item>
     </Files>
     <RequiredPkgs>
       <Item>

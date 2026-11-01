@@ -14,7 +14,8 @@ uses
   PascalCommon.Normalizers, PascalCommon.Validators, PascalCommon.TimeZones.Data, PascalCommon.TimeZones, PascalCommon.Crypto, PascalCommon.AesGcm, 
   PascalCommon.Random, PascalCommon.TraceContext, PascalCommon.Metrics, 
   PascalCommon.Tracing, PascalCommon.Passwords, PascalCommon.StopSignal, 
-  PascalCommon.WinHeap;
+  PascalCommon.WinHeap, PascalCommon.Transport, PascalCommon.Transport.Posix, 
+  PascalCommon.Transport.Tcp;
 
 implementation
 

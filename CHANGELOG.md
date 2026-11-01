@@ -6,6 +6,23 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+### Added
+
+On the `transport` branch, not released until pascal-pipes-faa and pascal-redis-faa pass their
+suites on it (`docs/transport-design.md`, decision T8); the API may still change.
+
+- `PascalCommon.Transport`: the transport contract. `TPcEndpoint` (`Read`, `WriteExactly`,
+  `CloseAbort` from any thread, `SetIoDeadline`, `TryPeerAddress`, `TryPeerIdentity`,
+  `Handshake`), `TPcListener` (`Accept`, `Close`, `Port`), `TPcEndpointStream`, `TPcTcpOptions`
+  (a zeroed record is the recommended one), `TPcPeerIdentity`, the exceptions `EPcTransport`,
+  `EPcTransportClosed`, `EPcTransportTimeout`, `EPcTls`, and `PcParseHostPort`,
+  `PcFormatHostPort`, `PcFormatIPv6`, `PcFormatSockAddr`.
+- `PascalCommon.Transport.Tcp`: `PcTcpConnect` (one attempt per resolved address, IPv6 and
+  IPv4, inside one connect budget) and `PcTcpListen` (port 0 supported). WinSock2 on Windows,
+  both compilers; BaseUnix sockets on FPC/Unix through `PascalCommon.Transport.Posix`. From
+  pascal-pipes-faa's `Pipes.Transport.Tcp`/`.Posix`, translated, with two fixes (gotcha 15 and
+  the Windows wake hand-off in the unit's header).
+
 ## [1.26.0] - 2026-10-30
 
 ### Added
