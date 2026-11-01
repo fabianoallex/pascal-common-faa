@@ -71,6 +71,48 @@ type
     Nagle: Boolean;
   end;
 
+  { Which TLS implementation a connection uses (docs/transport-design.md, T3).
+    Chosen at run time, so one build covers both on Windows. }
+  TPcTlsBackend = (
+    /// SChannel on Windows, OpenSSL elsewhere.
+    tbDefault,
+    /// Windows only; EPcTls elsewhere.
+    tbSChannel,
+    /// libssl/libcrypto, loaded on first use (3.x preferred, 1.1.1 accepted).
+    tbOpenSsl);
+
+  { TLS options for a client or a server. As with TPcTcpOptions, a zeroed
+    record is the safe one: it validates the server against the system store
+    and puts the default deadline on the handshake.
+
+    Field                     client                       server
+    CertFile (+CertPassword)  own certificate (mTLS)       own certificate
+      / KeyFile                                            (required)
+    CaFile                    trust THIS CA for the        require client
+                              server instead of the        certificates from
+                              system store                 this CA (mTLS)
+    SkipServerVerification    no chain/hostname check      ignored
+
+    Formats (T7): CaFile is PEM on both backends. A certificate of one's own
+    is a PEM pair (CertFile + KeyFile) on OpenSSL and a PFX (CertFile +
+    CertPassword) on SChannel. }
+  TPcTlsOptions = record
+    CertFile: string;
+    CertPassword: string;
+    KeyFile: string;
+    CaFile: string;
+    /// Client: turns off the server's chain and hostname validation. The
+    /// field is the negative one so that zero validates; for a lab only:
+    /// without it the traffic is encrypted to whoever answers.
+    SkipServerVerification: Boolean;
+    /// The handshake's deadline per wait. 0 = PC_TLS_HANDSHAKE_TIMEOUT_DEFAULT;
+    /// PC_TLS_HANDSHAKE_NO_TIMEOUT removes it, which must be said explicitly:
+    /// without it, a peer that opens TCP and never sends a ClientHello holds a
+    /// server thread forever.
+    HandshakeTimeoutMs: Cardinal;
+    Backend: TPcTlsBackend;
+  end;
+
   { One established, bidirectional connection (client or server side). }
   TPcEndpoint = class
   public
@@ -127,6 +169,38 @@ type
     function Port: Word; virtual; abstract;
   end;
 
+  { A TLS session over a stream of raw bytes, implemented by a backend
+    (PascalCommon.Transport.SChannel, PascalCommon.Transport.OpenSSL) and used
+    by PascalCommon.Transport.Tls; applications use TPcEndpoint instead. It
+    owns the raw stream.
+
+    Read returns 0 only for the peer's close_notify. EPcTransport* from the
+    raw stream (closed, timeout) pass through unchanged, so a deadline or a
+    CloseAbort keeps its class; TLS protocol failures raise EPcTls. Write
+    writes everything or raises. One reader and one writer may run at once
+    (the backend serializes what it must); writers are serialized by the
+    caller. }
+  TPcTlsSession = class(TStream)
+  public
+    /// Runs the handshake. Called once, by the thread that will read.
+    procedure Negotiate; virtual; abstract;
+    /// The client's identity, on a server session under mTLS, after
+    /// Negotiate. False otherwise.
+    function TryPeerIdentity(out AIdentity: TPcPeerIdentity): Boolean; virtual;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+  end;
+
+  { A server's TLS credentials, loaded once when listening (so a wrong
+    password or file shows up at Listen, not at the first client) and shared
+    by every connection. Each session keeps its own reference to what it
+    needs, so the credentials may be freed while sessions are alive. }
+  TPcTlsServerCredentials = class
+  public
+    /// A server session over ARaw, not negotiated yet; it owns ARaw (also
+    /// when this raises).
+    function NewSession(ARaw: TStream): TPcTlsSession; virtual; abstract;
+  end;
+
   { TPcEndpoint as a TStream, for frame readers and writers. It doesn't own
     the endpoint. Not seekable (Seek returns 0). Read returns at least one
     byte or raises, like the endpoint: never 0, so ReadBuffer works. }
@@ -181,6 +255,12 @@ const
   PC_TCP_KEEPALIVE_PROBE_COUNT = 3;
   /// The IPv4 family: the same value on Windows and POSIX, unlike IPv6.
   PC_AF_INET = 2;
+  /// TPcTlsOptions.HandshakeTimeoutMs = 0. 15 s is generous for a handshake
+  /// over a bad VPN: the target isn't a slow network, it's a peer that never
+  /// talks.
+  PC_TLS_HANDSHAKE_TIMEOUT_DEFAULT = 15000;
+  /// Removes the handshake deadline (an explicit value on purpose).
+  PC_TLS_HANDSHAKE_NO_TIMEOUT = Cardinal($FFFFFFFF);
 
 /// Splits 'host:port'. Accepts IPv6 in brackets ('[::1]:5000') and '*' as a
 /// shortcut for '0.0.0.0'. The port must be 1..65535. EPcTransport when
@@ -229,6 +309,20 @@ begin
   AIdentity.CommonName := '';
   AIdentity.Subject := '';
   Result := False;
+end;
+
+{ TPcTlsSession }
+
+function TPcTlsSession.TryPeerIdentity(out AIdentity: TPcPeerIdentity): Boolean;
+begin
+  AIdentity.CommonName := '';
+  AIdentity.Subject := '';
+  Result := False;
+end;
+
+function TPcTlsSession.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+begin
+  Result := 0; // not seekable
 end;
 
 { TPcEndpointStream }

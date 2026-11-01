@@ -50,6 +50,7 @@ uses
   PascalCommon.WinHeapTests,
   PascalCommon.TransportTests,
   PascalCommon.TcpTransportTests,
+  PascalCommon.TlsTransportTests,
   PascalCommon.JsonMapperOptionalsTests;
 
 var

@@ -1,7 +1,7 @@
 # TCP and TLS transport — design
 
-Status: **accepted, 2026-11-01; step 1 in progress on the `transport` branch (TCP done, TLS
-next).** Phase K0 of pascal-kafka-faa's `docs/design.md` (its decision 1, taken by the user on
+Status: **accepted, 2026-11-01; step 1 done on the `transport` branch (TCP and TLS, both
+compilers).** Phase K0 of pascal-kafka-faa's `docs/design.md` (its decision 1, taken by the user on
 2026-11-01: "vamos extrair"). The user accepted decisions T1–T8 as recommended the same day
 ("segue recomendados"). Where step 1 stands: "Step 1, TCP" below.
 
@@ -194,13 +194,15 @@ during those migrations is then still free to fix.
 
 ## Open points to measure
 
-- **SChannel with a reader and a writer at once.** OpenSSL's backend in all three copies has
+- **SChannel with a reader and a writer at once.** *Closed in step 1 by serializing the
+  context calls; see "Step 1, TLS".* The original question: OpenSSL's backend in all three copies has
   two locks (`FLock`, `FSendLock`) for exactly that case. No copy of the SChannel backend has
   a lock, and no copy's comments say why. amqp and pipes do read and write at the same time over
   SChannel; whether that is safe by Microsoft's rules or only hasn't failed yet is not known.
   Add a stress test in step 1 before relying on it.
 - pipes' SChannel unit header still says "mTLS ... fora desta primeira versão", while its code
-  has client certificates (`PFXImportCertStore`). Fix the comment on the way in.
+  has client certificates (`PFXImportCertStore`). Fix the comment on the way in. *Done: the
+  header here describes what the unit does.*
 - The size and start-up cost of T3.
 
 ## Step 1, TCP (2026-11-01)
@@ -249,6 +251,68 @@ Connect timeout against a host that drops the SYN isn't tested: it needs an addr
 blackholes, which a loopback-only suite doesn't have; the closed-port test checks that the
 budget is respected (Windows retries a refused SYN on loopback for about 2 s, so with a 1 s
 budget it ends as a timeout there and as a refusal on Linux).
+
+## Step 1, TLS (2026-11-01)
+
+Units: `PascalCommon.Transport` gained `TPcTlsBackend`, `TPcTlsOptions`, the
+`PC_TLS_HANDSHAKE_*` constants and two base classes for the backends (`TPcTlsSession`, a
+`TStream` over the raw bytes, and `TPcTlsServerCredentials`, loaded once per listener);
+`PascalCommon.Transport.Tls` (`PcTlsConnect`, `PcTlsListen`, `PcTlsWrap`, `TPcTlsEndpoint`,
+`TPcTlsListener`, `PcTlsResolveBackend`, `PcTlsBackendName`, `PcTlsBackendInfo`);
+`PascalCommon.Transport.SChannel` (Windows) and `PascalCommon.Transport.OpenSSL` (everywhere).
+`tests/pki` came from pipes (two files renamed into English). Tests:
+`PascalCommon.TlsTransportTests`, 22 per pair of backends: tbDefault on both sides, and on
+Windows also OpenSSL-OpenSSL and both crossings in the same run (88 on Windows).
+
+Measured: FPC 3.2.2 Windows x64, 544 tests, 0 leaks (OpenSSL 3 from Git's `mingw64in`); FPC
+3.2.2 Linux (Debian 12, OpenSSL 3), 478 tests, 0 leaks, also three runners at once with
+`--cpus=1`; FPC 3.2.0 on Debian 11 with OpenSSL 1.1.1 (image `fpc-bullseye-ssl`), 478, 0 leaks.
+Delphi 12 Win32 and Win64: 544 tests, 0 failures, 0 leaks (built in the IDE, run from the
+console); the Win32 run loaded a 32-bit OpenSSL 3 found in `C:\Windows\SysWOW64`, so the
+OpenSSL fixtures ran there too. Two mutations of the SChannel checks were caught: the root comparison forced to true (the
+self-signed client test fails; another CA and the twin CA are refused earlier, by the chain)
+and the server name left out of the SSL policy (the wrong-name test fails).
+
+Where the code differs from pipes, and why:
+
+- **SChannel client with a private CA.** pipes' SChannel client ignored `CaFile` (its header
+  said so) and trusted only the system store, which T7 and Kafka's private CAs need. It now
+  validates manually after the handshake, like the server's mTLS check: chain with the CA file as
+  an additional store, no defect but an untrusted root, the root must be one of the CA file's
+  certificates, then the SSL policy with the host name (`pwszServerName`). The IP SAN
+  (`127.0.0.1`) matches through the policy too (measured on Windows 11).
+- **The root is compared byte for byte** with the CA file's certificates, not with
+  `CERT_FIND_EXISTING` (whose criterion Microsoft doesn't define; Wine's is issuer + serial).
+- **`AUTHTYPE_CLIENT` is 1** (wincrypt.h). pipes passed 2 (`AUTHTYPE_SERVER`) to check a client
+  certificate; it passed its tests, but it asked the wrong question.
+- **SChannel: `SEC_I_INCOMPLETE_CREDENTIALS`** (the server asks for a certificate the client
+  doesn't have) continues the handshake without one, so the server refuses it with `EPcTls`.
+  pipes' client gave up and the server only saw a closed connection. Found by the crossed
+  fixture (SChannel client, OpenSSL server).
+- **SChannel concurrency, the open point below: closed by serializing.** A lock around
+  `EncryptMessage`, `DecryptMessage` and the shutdown token, never held during socket IO. The
+  full-duplex TLS test (4 MB each way, a reader and a writer on each endpoint, every pair of
+  backends) passes; it doesn't prove the unlocked version was unsafe, and this one doesn't
+  depend on knowing.
+- **The raw stream's failures keep their class** through both backends: a deadline is
+  `EPcTransportTimeout` and a `CloseAbort` is `EPcTransportClosed`, during the handshake and
+  after. pipes' backends turned every failure into EOF ("closed by the peer").
+- **`TPcTlsEndpoint.SetIoDeadline` reaches the TCP endpoint.** pipes' TLS endpoint didn't
+  override it, so a deadline on a TLS connection silently did nothing.
+- **Server credentials are loaded once at Listen on both backends**; on OpenSSL that is one
+  `SSL_CTX` shared by the sessions (`SSL_new` takes a reference), so a wrong key or certificate
+  fails at Listen, as SChannel's did. Each session holds its own reference to what it uses, so a
+  listener may be freed while its connections live.
+- **Read or Write on a server endpoint before `Handshake` raises `EPcTls`.**
+- **The OpenSSL unit keeps pipes' Android branches** (`{$IFDEF ANDROID}`: library names and
+  the system CA directories), for `PcTlsWrap` over pipes' Android endpoint (T4). Not tested
+  here.
+
+On Windows without a loadable OpenSSL, the three OpenSSL fixtures print a notice and pass;
+SChannel's still run. That path wasn't exercised on this machine (both builds found an
+OpenSSL). Off Windows, OpenSSL missing fails every TLS test.
+
+Still open: T3's size and start-up cost (not measured); PFX on OpenSSL (T7, later).
 
 ## Sources
 

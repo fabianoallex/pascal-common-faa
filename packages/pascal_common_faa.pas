@@ -15,7 +15,8 @@ uses
   PascalCommon.Random, PascalCommon.TraceContext, PascalCommon.Metrics, 
   PascalCommon.Tracing, PascalCommon.Passwords, PascalCommon.StopSignal, 
   PascalCommon.WinHeap, PascalCommon.Transport, PascalCommon.Transport.Posix, 
-  PascalCommon.Transport.Tcp;
+  PascalCommon.Transport.Tcp, PascalCommon.Transport.SChannel, 
+  PascalCommon.Transport.OpenSSL, PascalCommon.Transport.Tls;
 
 implementation
 

@@ -121,6 +121,18 @@
         <Filename Value="..\src\PascalCommon.Transport.Tcp.pas"/>
         <UnitName Value="PascalCommon.Transport.Tcp"/>
       </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Transport.SChannel.pas"/>
+        <UnitName Value="PascalCommon.Transport.SChannel"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Transport.OpenSSL.pas"/>
+        <UnitName Value="PascalCommon.Transport.OpenSSL"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Transport.Tls.pas"/>
+        <UnitName Value="PascalCommon.Transport.Tls"/>
+      </Item>
     </Files>
     <RequiredPkgs>
       <Item>

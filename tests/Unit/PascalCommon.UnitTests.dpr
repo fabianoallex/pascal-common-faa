@@ -41,6 +41,9 @@ uses
   PascalCommon.WinHeap in '..\..\src\PascalCommon.WinHeap.pas',
   PascalCommon.Transport in '..\..\src\PascalCommon.Transport.pas',
   PascalCommon.Transport.Tcp in '..\..\src\PascalCommon.Transport.Tcp.pas',
+  PascalCommon.Transport.SChannel in '..\..\src\PascalCommon.Transport.SChannel.pas',
+  PascalCommon.Transport.OpenSSL in '..\..\src\PascalCommon.Transport.OpenSSL.pas',
+  PascalCommon.Transport.Tls in '..\..\src\PascalCommon.Transport.Tls.pas',
   PascalJsonMapper.Json in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas',
   PascalJsonMapper.Mapper in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas',
   PascalCommon.JsonMapper.Optionals in '..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas',
@@ -70,6 +73,7 @@ uses
   PascalCommon.WinHeapTests in 'PascalCommon.WinHeapTests.pas',
   PascalCommon.TransportTests in 'PascalCommon.TransportTests.pas',
   PascalCommon.TcpTransportTests in 'PascalCommon.TcpTransportTests.pas',
+  PascalCommon.TlsTransportTests in 'PascalCommon.TlsTransportTests.pas',
   PascalCommon.JsonMapperOptionalsTests in 'PascalCommon.JsonMapperOptionalsTests.pas';
 
 var

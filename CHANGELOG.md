@@ -22,6 +22,16 @@ suites on it (`docs/transport-design.md`, decision T8); the API may still change
   both compilers; BaseUnix sockets on FPC/Unix through `PascalCommon.Transport.Posix`. From
   pascal-pipes-faa's `Pipes.Transport.Tcp`/`.Posix`, translated, with two fixes (gotcha 15 and
   the Windows wake hand-off in the unit's header).
+- `PascalCommon.Transport.Tls`: `PcTlsConnect`, `PcTlsListen` (the server handshake runs in
+  `Handshake`, on the connection's thread) and `PcTlsWrap` (TLS over any endpoint), with
+  `TPcTlsOptions` (own certificate, `CaFile`, `SkipServerVerification`, `HandshakeTimeoutMs`) and
+  the backend chosen at run time (`TPcTlsOptions.Backend`: SChannel by default on Windows, OpenSSL
+  elsewhere and on request; no compile define). Client and server, mTLS with the client's
+  verified identity (`TryPeerIdentity`), a private CA on both backends, the hostname or IP check,
+  `PcTlsBackendInfo`. Backends `PascalCommon.Transport.SChannel` and
+  `PascalCommon.Transport.OpenSSL` (libssl/libcrypto 3.x or 1.1.1, loaded on first use), from
+  pascal-pipes-faa's, translated; what changed is listed in `docs/transport-design.md`, "Step 1,
+  TLS". Test certificates in `tests/pki`.
 
 ## [1.26.0] - 2026-10-30
 
