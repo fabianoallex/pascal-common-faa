@@ -32,6 +32,11 @@ suites on it (`docs/transport-design.md`, decision T8); the API may still change
   `PascalCommon.Transport.OpenSSL` (libssl/libcrypto 3.x or 1.1.1, loaded on first use), from
   pascal-pipes-faa's, translated; what changed is listed in `docs/transport-design.md`, "Step 1,
   TLS". Test certificates in `tests/pki`.
+- From pascal-pipes-faa's migration (`docs/transport-design.md`, "Step 2, pipes"):
+  `EPcTransportRefused` (`PcTcpConnect` when nothing listens, so a retry loop can tell it from
+  a name that doesn't resolve), `PcTlsListenOver` (a TLS server over any `TPcListener`), and
+  `PascalCommon.Transport.Tcp` compiling on Delphi off Windows (`PcTcpConnect`/`PcTcpListen`
+  raise there) so that `PascalCommon.Transport.Tls` does too.
 
 ## [1.26.0] - 2026-10-30
 

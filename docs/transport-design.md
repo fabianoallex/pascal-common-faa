@@ -1,7 +1,7 @@
 # TCP and TLS transport — design
 
 Status: **accepted, 2026-11-01; step 1 done on the `transport` branch (TCP and TLS, both
-compilers).** Phase K0 of pascal-kafka-faa's `docs/design.md` (its decision 1, taken by the user on
+compilers); step 2 (pipes) done on FPC, Delphi pending.** Phase K0 of pascal-kafka-faa's `docs/design.md` (its decision 1, taken by the user on
 2026-11-01: "vamos extrair"). The user accepted decisions T1–T8 as recommended the same day
 ("segue recomendados"). Where step 1 stands: "Step 1, TCP" below.
 
@@ -313,6 +313,41 @@ SChannel's still run. That path wasn't exercised on this machine (both builds fo
 OpenSSL). Off Windows, OpenSSL missing fails every TLS test.
 
 Still open: T3's size and start-up cost (not measured); PFX on OpenSSL (T7, later).
+
+## Step 2, pipes (2026-11-01)
+
+pascal-pipes-faa runs on these units (its `docs/ARQUITETURA.md` section 26). What it keeps:
+the Named Pipe and Android endpoints as `TPcEndpoint` subclasses (T4), the Unix socket built
+there and handed to `TPcPosixSocketEndpoint`/`TPcPosixSocketListener` (its copy is gone), the
+connect retry loop (T5) and its own exceptions through a facade that wraps the `TPcEndpoint`
+and translates `EPcTransport*` (T6). Its `TlsOptions` record is now an alias of
+`TPcTlsOptions`, with the backend chosen at run time; `PIPES_OPENSSL` only changes its
+default (T3).
+
+Measured on pipes: FPC 3.2.2 Windows x64, 137 unit and 170 integration tests (146 before:
+its TLS suite now runs a second time with tbOpenSsl in the same run), 0 leaks; FPC 3.2.2
+Linux (Debian 12, OpenSSL 3) and FPC 3.2.0 on Debian 11 (OpenSSL 1.1.1), 137 and 146, 0
+leaks. Delphi: not run yet.
+
+Found in the API while migrating, fixed here:
+
+- **`EPcTransportRefused`.** `PcTcpConnect` raised plain `EPcTransport` both for a refused
+  connect and for a name that doesn't resolve; T5's retry loop could only tell them apart by
+  the message. Test: `Connect_ClosedPort_IsRefused` (a 6 s budget, longer than Windows' ~2 s
+  of SYN retries on loopback).
+- **`PcTlsListenOver`.** A TLS server over any `TPcListener`. `TPcTlsListener.Create` was
+  public, but server credentials could only be built inside `PascalCommon.Transport.Tls`, so
+  pipes' Android listener had no TLS server. Takes ownership of the inner listener, also
+  when it raises. Tests: `ListenOver_AnyListener_RoundTrip`,
+  `ListenOver_WithoutCertificate_RaisesAndFreesTheInner`, per pair of backends.
+- **`PascalCommon.Transport.Tcp` on Delphi off Windows.** `PascalCommon.Transport.Tls` uses
+  it, and its non-Windows branch is FPC-only, so pipes' Android build couldn't reach
+  `PcTlsWrap`. That branch now compiles there with `PcTcpConnect`/`PcTcpListen` raising.
+  Not compiled for Android (Delphi CE has no command-line build); pipes' device suite will
+  show it.
+
+Not changed, decided on pipes' side: `PcParseHostPort` keeps refusing `'::1:5000'`; pipes'
+own parser still reads it as before for one minor version.
 
 ## Sources
 
