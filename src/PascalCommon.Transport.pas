@@ -40,6 +40,12 @@ type
   EPcTransportClosed = class(EPcTransport);
   /// A wait passed its deadline (connect, SetIoDeadline, TLS handshake).
   EPcTransportTimeout = class(EPcTransport);
+  /// Connect: every address answered that nothing listens on the port
+  /// (ECONNREFUSED). Its own class because it is the one failure a caller may
+  /// want to retry (a server still starting), unlike a name that doesn't
+  /// resolve; telling them apart by the message would tie the caller to its
+  /// text.
+  EPcTransportRefused = class(EPcTransport);
   /// TLS: handshake, certificate validation, or the TLS library is missing.
   EPcTls = class(EPcTransport);
 

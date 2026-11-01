@@ -105,6 +105,13 @@ function PcTlsConnect(const AHost: string; APort: Word;
 function PcTlsListen(const ABindAddress: string; APort: Word;
   const AOptions: TPcTcpOptions; const ATls: TPcTlsOptions): TPcListener;
 
+/// A TLS server over any listener (pipes' Android one, which PcTcpListen
+/// can't build there): loads the credentials now, as PcTlsListen does, and
+/// wraps each accepted endpoint. Takes ownership of AInner, also when this
+/// raises.
+function PcTlsListenOver(AInner: TPcListener;
+  const ATls: TPcTlsOptions): TPcListener;
+
 /// tbDefault resolved for this platform; tbSChannel off Windows raises EPcTls.
 function PcTlsResolveBackend(ABackend: TPcTlsBackend): TPcTlsBackend;
 
@@ -355,6 +362,20 @@ function PcTlsConnect(const AHost: string; APort: Word;
 begin
   PcTlsResolveBackend(ATls.Backend); // fail before connecting
   Result := PcTlsWrap(PcTcpConnect(AHost, APort, AOptions), AHost, ATls);
+end;
+
+function PcTlsListenOver(AInner: TPcListener;
+  const ATls: TPcTlsOptions): TPcListener;
+var
+  LCredentials: TPcTlsServerCredentials;
+begin
+  try
+    LCredentials := NewServerCredentials(ATls);
+  except
+    AInner.Free;
+    raise;
+  end;
+  Result := TPcTlsListener.Create(AInner, LCredentials, ATls);
 end;
 
 function PcTlsListen(const ABindAddress: string; APort: Word;

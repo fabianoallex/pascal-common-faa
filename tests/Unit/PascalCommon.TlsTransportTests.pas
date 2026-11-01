@@ -96,6 +96,8 @@ type
     [Test] procedure TryPeerAddress_IsTheInnerEndpoints;
     [Test] procedure ServerRead_BeforeHandshake_Raises;
     [Test] procedure Listen_WithoutCertificate_Raises;
+    [Test] procedure ListenOver_AnyListener_RoundTrip;
+    [Test] procedure ListenOver_WithoutCertificate_RaisesAndFreesTheInner;
     [Test] procedure BackendInfo_NamesTheBackendInUse;
   end;
 
@@ -954,6 +956,48 @@ begin
   LClass := '';
   try
     FListener := PcTlsListen('127.0.0.1', 0, TcpOpts, LTls);
+  except
+    on E: Exception do
+      LClass := E.ClassName;
+  end;
+  TAssert.AssertEquals(EPcTls.ClassName, LClass);
+end;
+
+procedure TTlsTransportTests.ListenOver_AnyListener_RoundTrip;
+var
+  LOk: Boolean;
+  LError: string;
+  LByte: Byte;
+begin
+  if not Ready then
+    Exit;
+  FListener := PcTlsListenOver(PcTcpListen('127.0.0.1', 0, TcpOpts),
+    ServerOpts(''));
+  FServer := TTlsServerThread.Create(FListener);
+  LOk := TryConnect('127.0.0.1', ClientOpts('', '', True), LError);
+  TAssert.AssertTrue(LError, LOk);
+  TAssert.AssertEquals('server', '', ServerResult);
+  LByte := 42;
+  FClientEp.WriteExactly(LByte, 1);
+  LByte := 0;
+  TAssert.AssertEquals(1, ServerEndpoint.Read(LByte, 1));
+  TAssert.AssertEquals(42, Integer(LByte));
+end;
+
+procedure TTlsTransportTests.ListenOver_WithoutCertificate_RaisesAndFreesTheInner;
+var
+  LTls: TPcTlsOptions;
+  LClass: string;
+begin
+  if not Ready then
+    Exit;
+  LTls := Default(TPcTlsOptions);
+  LTls.Backend := ServerBackend;
+  LClass := '';
+  // The inner listener belongs to PcTlsListenOver from the call on; a leak
+  // here shows up in heaptrc/FastMM, not as an assertion.
+  try
+    FListener := PcTlsListenOver(PcTcpListen('127.0.0.1', 0, TcpOpts), LTls);
   except
     on E: Exception do
       LClass := E.ClassName;

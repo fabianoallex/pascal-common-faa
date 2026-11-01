@@ -71,6 +71,7 @@ type
     [Test] procedure RequestReply_WriterNotStarvedByAWaitingReader;
     [Test] procedure IPv6Loopback_WhereTheMachineHasIt;
     [Test] procedure Connect_ClosedPort_RaisesWithinTheBudget;
+    [Test] procedure Connect_ClosedPort_IsRefused;
     [Test] procedure Connect_UnresolvableName_Raises;
     [Test] procedure Listen_PortInUse_Raises;
   end;
@@ -860,6 +861,29 @@ begin
   TAssert.AssertTrue('connect to a closed port should raise', LRaised);
   TAssert.AssertTrue('ignored the budget: ' + IntToStr(LElapsed) + ' ms',
     LElapsed < 3000);
+end;
+
+procedure TTcpTransportTests.Connect_ClosedPort_IsRefused;
+var
+  LListener: TPcListener;
+  LClass: string;
+begin
+  // A budget longer than Windows' ~2 s of SYN retries on loopback, so both
+  // platforms end with the refusal itself: the class a library's retry loop
+  // tells apart from a name that doesn't resolve (EPcTransport).
+  LListener := PcTcpListen('127.0.0.1', 0, Opts);
+  FPort := LListener.Port;
+  LListener.Free;
+  FHost := '127.0.0.1';
+  FTimeoutMs := 6000;
+  LClass := '';
+  try
+    DoConnect;
+  except
+    on E: Exception do
+      LClass := E.ClassName;
+  end;
+  TAssert.AssertEquals(EPcTransportRefused.ClassName, LClass);
 end;
 
 procedure TTcpTransportTests.Connect_UnresolvableName_Raises;

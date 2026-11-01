@@ -65,7 +65,9 @@ uses
   {$IFDEF PASCALCOMMON_WINDOWS}
   , Windows, WinSock2
   {$ELSE}
+  {$IFDEF FPC}
   , UnixType, BaseUnix, Sockets, PascalCommon.Transport.Posix
+  {$ENDIF}
   {$ENDIF};
 
 {$IFDEF PASCALCOMMON_WINDOWS}
@@ -110,7 +112,7 @@ type
     procedure Close; override;
     function Port: Word; override;
   end;
-{$ELSE}
+{$ELSE}{$IFDEF FPC}
 type
   { The POSIX listener, plus the TCP options it applies to each accepted
     socket (Linux passes TCP_NODELAY on from the listening socket, but the
@@ -122,13 +124,14 @@ type
   public
     constructor Create(AFd: cint; const AOptions: TPcTcpOptions);
   end;
-{$ENDIF}
+{$ENDIF}{$ENDIF}
 
 /// Connects to AHost:APort. AHost is a name or an IPv4/IPv6 literal (with or
 /// without brackets). Every address the name resolves to is tried once, in
 /// getaddrinfo's order, all inside AOptions.ConnectTimeoutMs.
-/// EPcTransportTimeout when the budget runs out; EPcTransport when every
-/// address refused or failed otherwise (or the name doesn't resolve).
+/// EPcTransportTimeout when the budget runs out; EPcTransportRefused when
+/// the last address tried refused (nothing listens there); EPcTransport for
+/// any other failure, a name that doesn't resolve included.
 function PcTcpConnect(const AHost: string; APort: Word;
   const AOptions: TPcTcpOptions): TPcEndpoint;
 
@@ -140,6 +143,32 @@ function PcTcpListen(const ABindAddress: string; APort: Word;
   const AOptions: TPcTcpOptions): TPcListener;
 
 implementation
+
+{$IF not defined(PASCALCOMMON_WINDOWS) and not defined(FPC)}
+
+{ Delphi off Windows (Android, macOS, Linux): no TCP here. The POSIX branch
+  below is built on FPC's BaseUnix/Sockets, and its addrinfo follows glibc's
+  layout, which bionic doesn't (ai_canonname comes before ai_addr).
+  pascal-pipes-faa keeps its own Android endpoint (docs/transport-design.md,
+  T4); this branch exists so that PascalCommon.Transport.Tls, which uses this
+  unit for PcTlsConnect/PcTlsListen, still compiles there for PcTlsWrap and
+  PcTlsListenOver. }
+
+function PcTcpConnect(const AHost: string; APort: Word;
+  const AOptions: TPcTcpOptions): TPcEndpoint;
+begin
+  raise EPcTransport.Create('PcTcpConnect is not available on this platform ' +
+    '(Delphi off Windows); connect with your own TPcEndpoint and PcTlsWrap');
+end;
+
+function PcTcpListen(const ABindAddress: string; APort: Word;
+  const AOptions: TPcTcpOptions): TPcListener;
+begin
+  raise EPcTransport.Create('PcTcpListen is not available on this platform ' +
+    '(Delphi off Windows); listen with your own TPcListener and PcTlsListenOver');
+end;
+
+{$ELSE}
 
 { --- getaddrinfo ------------------------------------------------------------ }
 
@@ -769,6 +798,9 @@ begin
   if LErr = WSAETIMEDOUT then
     raise EPcTransportTimeout.CreateFmt('timeout (%u ms) connecting to %s',
       [LTimeout, PcFormatHostPort(AHost, APort)]);
+  if LErr = WSAECONNREFUSED then
+    raise EPcTransportRefused.CreateFmt('connect to %s refused (WSA %d)',
+      [PcFormatHostPort(AHost, APort), LErr]);
   RaiseWsaError(Format('connect to %s', [PcFormatHostPort(AHost, APort)]), LErr);
   Result := nil; // unreachable
 end;
@@ -967,12 +999,17 @@ begin
   if LErr = ESysETIMEDOUT then
     raise EPcTransportTimeout.CreateFmt('timeout (%u ms) connecting to %s',
       [LTimeout, PcFormatHostPort(AHost, APort)]);
+  if LErr = ESysECONNREFUSED then
+    raise EPcTransportRefused.CreateFmt('connect to %s refused (error %d)',
+      [PcFormatHostPort(AHost, APort), LErr]);
   PcRaisePosixError(Format('connect to %s', [PcFormatHostPort(AHost, APort)]),
     LErr);
   Result := nil; // unreachable
 end;
 
 {$ENDIF}
+
+{$IFEND}
 
 {$IFDEF PASCALCOMMON_WINDOWS}
 var
