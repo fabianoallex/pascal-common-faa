@@ -1,7 +1,7 @@
 # TCP and TLS transport — design
 
 Status: **accepted, 2026-11-01; step 1 done on the `transport` branch (TCP and TLS, both
-compilers); step 2 (pipes) done on FPC, Delphi pending.** Phase K0 of pascal-kafka-faa's `docs/design.md` (its decision 1, taken by the user on
+compilers); step 2 (pipes) done, both compilers.** Phase K0 of pascal-kafka-faa's `docs/design.md` (its decision 1, taken by the user on
 2026-11-01: "vamos extrair"). The user accepted decisions T1–T8 as recommended the same day
 ("segue recomendados"). Where step 1 stands: "Step 1, TCP" below.
 
@@ -327,7 +327,9 @@ default (T3).
 Measured on pipes: FPC 3.2.2 Windows x64, 137 unit and 170 integration tests (146 before:
 its TLS suite now runs a second time with tbOpenSsl in the same run), 0 leaks; FPC 3.2.2
 Linux (Debian 12, OpenSSL 3) and FPC 3.2.0 on Debian 11 (OpenSSL 1.1.1), 137 and 146, 0
-leaks. Delphi: not run yet.
+leaks. Delphi 12 Win32 and Win64: 137 and 170, 0 failures, 0 leaks. The first Delphi run exposed a
+pre-existing bug in pipes' reconnect counter, which the faster handshake made frequent (its
+`docs/ARQUITETURA.md` 26.6.1); nothing in these units.
 
 Found in the API while migrating, fixed here:
 
