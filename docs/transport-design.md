@@ -1,7 +1,7 @@
 # TCP and TLS transport — design
 
 Status: **accepted, 2026-11-01; step 1 done on the `transport` branch (TCP and TLS, both
-compilers); step 2 (pipes) done, both compilers.** Phase K0 of pascal-kafka-faa's `docs/design.md` (its decision 1, taken by the user on
+compilers); step 2 (pipes) done, both compilers; step 3 (redis) done, both compilers.** Phase K0 of pascal-kafka-faa's `docs/design.md` (its decision 1, taken by the user on
 2026-11-01: "vamos extrair"). The user accepted decisions T1–T8 as recommended the same day
 ("segue recomendados"). Where step 1 stands: "Step 1, TCP" below.
 
@@ -350,6 +350,44 @@ Found in the API while migrating, fixed here:
 
 Not changed, decided on pipes' side: `PcParseHostPort` keeps refusing `'::1:5000'`; pipes'
 own parser still reads it as before for one minor version.
+
+## Step 3, redis (2026-11-01)
+
+pascal-redis-faa runs on these units (its `docs/DECISOES.md` section 53, branch
+`transport-common`). `Redis.Connection` connects with `PcTcpConnect` + `PcTlsWrap` and reads
+through `TPcEndpointStream`; it is the exception boundary (T6): no `EPcTransport*` leaves the
+library, each becomes the `ERedis*` that already left it, with this library's message.
+`TRedisParams` gained `TlsCaFile`, `TlsCertFile`, `TlsKeyFile`, `TlsCertPassword` and
+`TlsBackend`; `REDIS_OPENSSL` only changes the default (T3). Redis's two TLS units are empty
+wrappers for one minor version, as pipes'.
+
+Measured on redis: FPC 3.2.2 Windows x64, 483 unit and 76 integration tests, 0 leaks, in both
+build modes; FPC 3.2.2 Linux (Debian 12), the same, also three runners at once with `--cpus=1`
+(18 of 18 runs). Its SmokeTest against a real Redis 7.2, which now validates the server against a
+private CA and does mTLS: 170 steps over TLS on Windows (both backends in one run) and 165 on
+Linux (OpenSSL 3.0). Delphi 12 Win32 and Win64, Debug (SChannel) and OpenSSL configurations:
+483 and 76, 0 failures, 0 leaks, SmokeTest 170 over TLS, in all four (built in the IDE, run from
+the console). This library's own Delphi suite with the three new tests: not run yet.
+
+Found in the API while migrating, fixed here:
+
+- **One deadline per direction (`SetReadDeadline`, `SetWriteDeadline`).** redis had
+  `SO_RCVTIMEO` and `SO_SNDTIMEO` apart, and its pub/sub subscriber needs both: the reader
+  waits with no deadline (silence is a channel's normal state) while a `SUBSCRIBE` written to a
+  server that stopped reading must give up. `SetIoDeadline` sets one value for both directions,
+  and the reader and the writer setting it in turn would race. T1 expected the shared deadline
+  to cover redis's send timeout; it covers the timeout, not the split. Each value is written
+  only by its direction's thread. Tests: `SetWriteDeadline_WriterGivesUpWhileTheReaderWaitsOn`
+  and `SetReadDeadline_OnlyTheReadTimesOut` (TCP), `SetReadDeadline_ReadTimesOutThroughTls`
+  (per pair of backends); the first fails when `SetWriteDeadline` also sets the read deadline.
+  redis's integration suite has the same shape over `TRedisConnection`, and fails when the
+  connection uses `SetIoDeadline` instead.
+
+T1's check ("the integration test where the server stops reading"): redis had no such test.
+It has two now, against a listener in the process that accepts and never reads (Redis 7 ships
+`DEBUG SLEEP` disabled). A fixed write of 64 MB didn't block on Windows loopback, even with
+the connection accepted: the tests write 16 MB chunks until the deadline fires, as
+`TEndlessWriter` does here (32 MB went through in one measured run).
 
 ## Sources
 

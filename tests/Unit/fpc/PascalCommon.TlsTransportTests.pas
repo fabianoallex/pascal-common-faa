@@ -96,6 +96,7 @@ type
     procedure CloseAbort_UnblocksATlsReader;
     procedure PeerClosing_ReadRaisesClosed;
     procedure SetIoDeadline_ReadTimesOutThroughTls;
+    procedure SetReadDeadline_ReadTimesOutThroughTls;
     procedure TryPeerAddress_IsTheInnerEndpoints;
     procedure ServerRead_BeforeHandshake_Raises;
     procedure Listen_WithoutCertificate_Raises;
@@ -893,6 +894,33 @@ begin
   TAssert.AssertTrue(LError, LOk);
   TAssert.AssertEquals('server', '', ServerResult);
   FClientEp.SetIoDeadline(200);
+  LClass := '';
+  try
+    FClientEp.Read(LBuf, SizeOf(LBuf)); // the server sends nothing
+  except
+    on E: Exception do
+      LClass := E.ClassName;
+  end;
+  TAssert.AssertEquals(EPcTransportTimeout.ClassName, LClass);
+end;
+
+procedure TTlsTransportTests.SetReadDeadline_ReadTimesOutThroughTls;
+var
+  LOk: Boolean;
+  LError, LClass: string;
+  LBuf: array[0..15] of Byte;
+begin
+  // Both per-direction deadlines reach the TCP endpoint (the base class
+  // raises for a transport that doesn't forward them).
+  if not Ready then
+    Exit;
+  StartServer('');
+  LOk := TryConnect('127.0.0.1',
+    ClientOpts('', '', True), LError);
+  TAssert.AssertTrue(LError, LOk);
+  TAssert.AssertEquals('server', '', ServerResult);
+  FClientEp.SetWriteDeadline(5000);
+  FClientEp.SetReadDeadline(200);
   LClass := '';
   try
     FClientEp.Read(LBuf, SizeOf(LBuf)); // the server sends nothing

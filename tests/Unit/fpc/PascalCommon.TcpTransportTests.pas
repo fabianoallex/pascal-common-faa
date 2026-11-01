@@ -15,7 +15,8 @@
   translated: both directions, the stream adapter, Close unblocking Accept,
   CloseAbort unblocking Read, the peer's drop detected, several clients.
   New here: the port reported after binding to 0, the peer address, the IO
-  deadline on read and on write, CloseAbort from a third thread unblocking a
+  deadline on read and on write (also one per direction, as a pub/sub
+  subscriber needs: a reader with none and a writer with one), CloseAbort from a third thread unblocking a
   reader and a writer at once, IPv6 loopback, connect errors, and a
   full-duplex bulk transfer (a reader and a writer on each endpoint at the
   same time) and a request-reply exchange (a reader waiting while another
@@ -71,6 +72,8 @@ type
     procedure TryPeerAddress_IsTheOtherSide;
     procedure SetIoDeadline_ReadTimesOut;
     procedure SetIoDeadline_WriteTimesOutWhenThePeerStopsReading;
+    procedure SetWriteDeadline_WriterGivesUpWhileTheReaderWaitsOn;
+    procedure SetReadDeadline_OnlyTheReadTimesOut;
     procedure FullDuplexBulk_ReaderAndWriterOnEachEndpoint;
     procedure RequestReply_WriterNotStarvedByAWaitingReader;
     procedure IPv6Loopback_WhereTheMachineHasIt;
@@ -713,6 +716,71 @@ begin
   finally
     LWriter.Free;
   end;
+end;
+
+procedure TTcpTransportTests.SetWriteDeadline_WriterGivesUpWhileTheReaderWaitsOn;
+var
+  LReader: TReadOneThread;
+  LWriter: TEndlessWriter;
+  LWriterDone, LReaderDone: Boolean;
+  LBuf: Byte;
+begin
+  // A pub/sub subscriber's shape: a reader waiting with no deadline (silence
+  // is normal there) and a writer, on the same endpoint, that must give up
+  // when the server stops reading. The server neither reads nor writes.
+  OpenLoopback('127.0.0.1');
+  FClientEp.SetReadDeadline(0);
+  FClientEp.SetWriteDeadline(300);
+  LReader := TReadOneThread.Create(FClientEp);
+  LWriter := nil;
+  try
+    LReader.Started.WaitFor(CWaitMs);
+    LWriter := TEndlessWriter.Create(FClientEp);
+    LWriterDone := LWriter.Done.WaitFor(CWaitMs) = wrSignaled;
+    // The reader has no deadline: it must still be waiting, long after the
+    // writer's 300 ms (a deadline shared by both would have ended it too).
+    LReaderDone := LReader.Done.WaitFor(0) = wrSignaled;
+    // Data still arrives on the endpoint whose write timed out.
+    LBuf := 7;
+    FServerEp.WriteExactly(LBuf, 1);
+    if LReader.Done.WaitFor(CWaitMs) <> wrSignaled then
+      FClientEp.CloseAbort;
+    if not LWriterDone then
+      FClientEp.CloseAbort;
+    LWriter.WaitFor;
+    LReader.WaitFor;
+    TAssert.AssertTrue('the write deadline did not fire', LWriterDone);
+    TAssert.AssertEquals(EPcTransportTimeout.ClassName, LWriter.ErrorClass);
+    TAssert.AssertFalse('the reader got the writer''s deadline', LReaderDone);
+    TAssert.AssertEquals('the reader', '', LReader.ErrorClass);
+  finally
+    LWriter.Free;
+    LReader.Free;
+  end;
+end;
+
+procedure TTcpTransportTests.SetReadDeadline_OnlyTheReadTimesOut;
+var
+  LBuf: array[0..15] of Byte;
+  LClass: string;
+begin
+  OpenLoopback('127.0.0.1');
+  FClientEp.SetIoDeadline(5000);
+  FClientEp.SetReadDeadline(200); // the write deadline stays 5000
+  LClass := '';
+  try
+    FClientEp.Read(LBuf, SizeOf(LBuf)); // the server sends nothing
+  except
+    on E: Exception do
+      LClass := E.ClassName;
+  end;
+  TAssert.AssertEquals(EPcTransportTimeout.ClassName, LClass);
+  // SetIoDeadline sets both again: 0 removes the read deadline too.
+  FClientEp.SetIoDeadline(0);
+  LBuf[0] := 9;
+  FServerEp.WriteExactly(LBuf[0], 1);
+  TAssert.AssertEquals(1, FClientEp.Read(LBuf, SizeOf(LBuf)));
+  TAssert.AssertEquals(9, Integer(LBuf[0]));
 end;
 
 procedure TTcpTransportTests.FullDuplexBulk_ReaderAndWriterOnEachEndpoint;

@@ -21,8 +21,9 @@ unit PascalCommon.Transport.Tls;
   - ABORT: CloseAbort goes to the inner endpoint. Every wait of a backend
     ends in the inner endpoint's Read/WriteExactly, so aborting there
     unblocks the whole stack with EPcTransportClosed.
-  - DEADLINE: SetIoDeadline goes to the inner endpoint (pipes' adapter didn't
-    forward it, so it silently did nothing on TLS). The handshake has its own
+  - DEADLINE: SetIoDeadline, SetReadDeadline and SetWriteDeadline go to the
+    inner endpoint (pipes' adapter didn't forward the first, so it silently
+    did nothing on TLS). The handshake has its own
     (HandshakeTimeoutMs), armed only while negotiating: an established session
     may idle for hours.
   - Read never returns 0: the peer's close_notify is EPcTransportClosed.
@@ -63,6 +64,11 @@ type
     procedure WriteExactly(const ABuffer; ACount: Integer); override;
     procedure CloseAbort; override;
     procedure SetIoDeadline(ATimeoutMs: Cardinal); override;
+    /// Both go to the inner endpoint. They count the raw socket's waits: a
+    /// TLS read that must first flush bytes of its own (OpenSSL may) waits
+    /// on that write under the write deadline.
+    procedure SetReadDeadline(ATimeoutMs: Cardinal); override;
+    procedure SetWriteDeadline(ATimeoutMs: Cardinal); override;
     /// Not a TLS matter: always the inner endpoint's, even before Handshake.
     function TryPeerAddress(out AAddress: string): Boolean; override;
     /// Server side under mTLS, after Handshake. A client gets False: who the
@@ -279,6 +285,16 @@ end;
 procedure TPcTlsEndpoint.SetIoDeadline(ATimeoutMs: Cardinal);
 begin
   FInner.SetIoDeadline(ATimeoutMs);
+end;
+
+procedure TPcTlsEndpoint.SetReadDeadline(ATimeoutMs: Cardinal);
+begin
+  FInner.SetReadDeadline(ATimeoutMs);
+end;
+
+procedure TPcTlsEndpoint.SetWriteDeadline(ATimeoutMs: Cardinal);
+begin
+  FInner.SetWriteDeadline(ATimeoutMs);
 end;
 
 function TPcTlsEndpoint.TryPeerAddress(out AAddress: string): Boolean;

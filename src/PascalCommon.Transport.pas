@@ -150,7 +150,25 @@ type
     /// The default does NOTHING: a transport that doesn't implement it waits
     /// with no deadline. Every backend that TLS wraps must implement it, or
     /// the handshake deadline silently disappears.
+    ///
+    /// Sets the read and the write deadline alike (see SetReadDeadline).
     procedure SetIoDeadline(ATimeoutMs: Cardinal); virtual;
+    /// The deadline of Read's waits alone; SetWriteDeadline, of
+    /// WriteExactly's. Same rules as SetIoDeadline, one direction each.
+    ///
+    /// They exist for a full-duplex connection where the two directions want
+    /// different answers: a pub/sub subscriber's reader waits for minutes
+    /// with nothing wrong (silence is its normal state), while a writer stuck
+    /// because the server stopped reading must give up. One deadline can't
+    /// say both, and the reader and the writer setting it in turn would race.
+    /// Each direction's value is touched only by the thread of that
+    /// direction, so a reader and a writer may set theirs at the same time.
+    ///
+    /// The default raises EPcTransport: unlike SetIoDeadline, asking for one
+    /// direction is explicit, and silently ignoring it would leave a wait
+    /// without the deadline the caller relies on.
+    procedure SetReadDeadline(ATimeoutMs: Cardinal); virtual;
+    procedure SetWriteDeadline(ATimeoutMs: Cardinal); virtual;
     /// The peer's address as 'host:port' (IPv6 in brackets, as
     /// PcParseHostPort reads it). False when the transport has none (a local
     /// pipe) or the socket no longer answers.
@@ -299,6 +317,16 @@ end;
 procedure TPcEndpoint.SetIoDeadline(ATimeoutMs: Cardinal);
 begin
   // No deadline by default (see the declaration).
+end;
+
+procedure TPcEndpoint.SetReadDeadline(ATimeoutMs: Cardinal);
+begin
+  raise EPcTransport.CreateFmt('%s has no separate read deadline', [ClassName]);
+end;
+
+procedure TPcEndpoint.SetWriteDeadline(ATimeoutMs: Cardinal);
+begin
+  raise EPcTransport.CreateFmt('%s has no separate write deadline', [ClassName]);
 end;
 
 function TPcEndpoint.TryPeerAddress(out AAddress: string): Boolean;

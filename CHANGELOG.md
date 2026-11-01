@@ -37,6 +37,12 @@ suites on it (`docs/transport-design.md`, decision T8); the API may still change
   a name that doesn't resolve), `PcTlsListenOver` (a TLS server over any `TPcListener`), and
   `PascalCommon.Transport.Tcp` compiling on Delphi off Windows (`PcTcpConnect`/`PcTcpListen`
   raise there) so that `PascalCommon.Transport.Tls` does too.
+- From pascal-redis-faa's migration (`docs/transport-design.md`, "Step 3, redis"):
+  `TPcEndpoint.SetReadDeadline` and `SetWriteDeadline`, one deadline per direction, on the TCP,
+  POSIX and TLS endpoints; `SetIoDeadline` still sets both. A pub/sub subscriber reads with no
+  deadline while its writer must give up when the server stops reading, which one shared
+  deadline can't say. The base class raises `EPcTransport` for a transport that doesn't
+  implement them (pipes' local ones), rather than ignoring the request.
 
 ## [1.26.0] - 2026-10-30
 

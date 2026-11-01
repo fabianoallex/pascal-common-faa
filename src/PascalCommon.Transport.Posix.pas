@@ -62,7 +62,10 @@ type
     FStopR: cint;          // self-pipe, read end (in every fpPoll)
     FStopW: cint;          // self-pipe, write end (CloseAbort writes 1 byte)
     FClosed: Integer;      // atomic: 1 after CloseAbort
-    FIoTimeoutMs: Cardinal; // 0 = no deadline (see SetIoDeadline)
+    // 0 = no deadline. One per direction (SetReadDeadline/SetWriteDeadline),
+    // each written only by that direction's thread.
+    FReadTimeoutMs: Cardinal;
+    FWriteTimeoutMs: Cardinal;
     /// Waits for the fd to become ready (AEvents) or for the stop.
     procedure WaitReadyOrStop(AEvents: SmallInt; const AOp: string);
   public
@@ -73,6 +76,8 @@ type
     procedure WriteExactly(const ABuffer; ACount: Integer); override;
     procedure CloseAbort; override;
     procedure SetIoDeadline(ATimeoutMs: Cardinal); override;
+    procedure SetReadDeadline(ATimeoutMs: Cardinal); override;
+    procedure SetWriteDeadline(ATimeoutMs: Cardinal); override;
     /// True only for an AF_INET/AF_INET6 socket; an AF_UNIX one has no IP.
     function TryPeerAddress(out AAddress: string): Boolean; override;
     property Fd: cint read FFd;
@@ -181,7 +186,18 @@ end;
 
 procedure TPcPosixSocketEndpoint.SetIoDeadline(ATimeoutMs: Cardinal);
 begin
-  FIoTimeoutMs := ATimeoutMs;
+  FReadTimeoutMs := ATimeoutMs;
+  FWriteTimeoutMs := ATimeoutMs;
+end;
+
+procedure TPcPosixSocketEndpoint.SetReadDeadline(ATimeoutMs: Cardinal);
+begin
+  FReadTimeoutMs := ATimeoutMs;
+end;
+
+procedure TPcPosixSocketEndpoint.SetWriteDeadline(ATimeoutMs: Cardinal);
+begin
+  FWriteTimeoutMs := ATimeoutMs;
 end;
 
 function TPcPosixSocketEndpoint.TryPeerAddress(out AAddress: string): Boolean;
@@ -207,14 +223,19 @@ var
   LRc: cint;
   LDeadline: UInt64;
   LWait: Int64;
+  LTimeoutMs: Cardinal;
 begin
   if PcAtomicGet(FClosed) <> 0 then
     raise EPcTransportClosed.Create(AOp + ' on a closed endpoint');
+  if (AEvents and POLLOUT) <> 0 then
+    LTimeoutMs := FWriteTimeoutMs
+  else
+    LTimeoutMs := FReadTimeoutMs;
   LDeadline := 0;
-  if FIoTimeoutMs <> 0 then
-    LDeadline := PcTickMs + FIoTimeoutMs;
+  if LTimeoutMs <> 0 then
+    LDeadline := PcTickMs + LTimeoutMs;
   repeat
-    if FIoTimeoutMs = 0 then
+    if LTimeoutMs = 0 then
       LWait := -1
     else
     begin
@@ -236,9 +257,9 @@ begin
     PcRaisePosixError(AOp + ' (poll)', fpgeterrno);
   if ((LFds[1].revents and POLLIN) <> 0) or (PcAtomicGet(FClosed) <> 0) then
     raise EPcTransportClosed.Create(AOp + ' aborted (CloseAbort)');
-  if (LRc = 0) and (FIoTimeoutMs <> 0) then
+  if (LRc = 0) and (LTimeoutMs <> 0) then
     raise EPcTransportTimeout.CreateFmt(
-      '%s: the peer did not respond within %u ms', [AOp, FIoTimeoutMs]);
+      '%s: the peer did not respond within %u ms', [AOp, LTimeoutMs]);
   // POLLERR/POLLHUP on the fd: let recv/send report it; there may still be
   // data queued to read after the HUP.
 end;

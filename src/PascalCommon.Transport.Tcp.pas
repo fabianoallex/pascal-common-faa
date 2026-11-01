@@ -84,7 +84,10 @@ type
     FReadWake: THandle;     // auto-reset: a writer saw FD_READ/FD_CLOSE
     FWriteWake: THandle;    // auto-reset: a reader saw FD_WRITE/FD_CLOSE
     FClosed: Integer;       // atomic: 1 after CloseAbort
-    FIoTimeoutMs: Cardinal; // 0 = no deadline (see SetIoDeadline)
+    // 0 = no deadline. One per direction (SetReadDeadline/SetWriteDeadline),
+    // each written only by that direction's thread.
+    FReadTimeoutMs: Cardinal;
+    FWriteTimeoutMs: Cardinal;
     procedure WaitReadyOrStop(AForWrite: Boolean; const AOp: string);
   public
     /// Takes ownership of ASocket (connected).
@@ -94,6 +97,8 @@ type
     procedure WriteExactly(const ABuffer; ACount: Integer); override;
     procedure CloseAbort; override;
     procedure SetIoDeadline(ATimeoutMs: Cardinal); override;
+    procedure SetReadDeadline(ATimeoutMs: Cardinal); override;
+    procedure SetWriteDeadline(ATimeoutMs: Cardinal); override;
     function TryPeerAddress(out AAddress: string): Boolean; override;
   end;
 
@@ -443,7 +448,18 @@ end;
 
 procedure TPcTcpWinEndpoint.SetIoDeadline(ATimeoutMs: Cardinal);
 begin
-  FIoTimeoutMs := ATimeoutMs;
+  FReadTimeoutMs := ATimeoutMs;
+  FWriteTimeoutMs := ATimeoutMs;
+end;
+
+procedure TPcTcpWinEndpoint.SetReadDeadline(ATimeoutMs: Cardinal);
+begin
+  FReadTimeoutMs := ATimeoutMs;
+end;
+
+procedure TPcTcpWinEndpoint.SetWriteDeadline(ATimeoutMs: Cardinal);
+begin
+  FWriteTimeoutMs := ATimeoutMs;
 end;
 
 function TPcTcpWinEndpoint.TryPeerAddress(out AAddress: string): Boolean;
@@ -469,19 +485,26 @@ var
   LNet: TPcNetworkEvents;
   LRc: DWORD;
   LWait: DWORD;
+  LTimeoutMs: Cardinal;
 begin
   if PcAtomicGet(FClosed) <> 0 then
     raise EPcTransportClosed.Create(AOp + ' on a closed endpoint');
   LEvents[0] := FSockEvent;
   LEvents[1] := FStopEvent;
   if AForWrite then
-    LEvents[2] := FWriteWake
+  begin
+    LEvents[2] := FWriteWake;
+    LTimeoutMs := FWriteTimeoutMs;
+  end
   else
+  begin
     LEvents[2] := FReadWake;
-  if FIoTimeoutMs = 0 then
+    LTimeoutMs := FReadTimeoutMs;
+  end;
+  if LTimeoutMs = 0 then
     LWait := PC_WSA_INFINITE
   else
-    LWait := FIoTimeoutMs;
+    LWait := LTimeoutMs;
   LRc := WSAWaitForMultipleEvents(3, @LEvents[0], False, LWait, False);
   if LRc = PC_WSA_WAIT_FAILED then
     RaiseWsaError(AOp + ' (wait)', WSAGetLastError);
@@ -491,7 +514,7 @@ begin
     raise EPcTransportClosed.Create(AOp + ' aborted (CloseAbort)');
   if LRc = PC_WSA_WAIT_TIMEOUT then
     raise EPcTransportTimeout.CreateFmt(
-      '%s: the peer did not respond within %u ms', [AOp, FIoTimeoutMs]);
+      '%s: the peer did not respond within %u ms', [AOp, LTimeoutMs]);
   // Resets FSockEvent and takes the pending events. Whatever belongs to the
   // other direction is handed on through its wake event, or a thread already
   // waiting for it would sleep through it (see the unit's header).
