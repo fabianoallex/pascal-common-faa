@@ -2,7 +2,9 @@
 
 Status: **released in 1.27.0 (2026-11-01, step 4).** Steps 1 to 3 done on both compilers:
 this library, then pascal-pipes-faa and pascal-redis-faa moved onto it; before the release
-pipes ran again on step 3's change (FPC Windows, Linux with OpenSSL 3 and 1.1.1). Next: step 5
+pipes ran again on step 3's change (FPC Windows, Linux with OpenSSL 3 and 1.1.1, Delphi 12
+Win32/Win64), and this library's suite ran on the release commit: 559 tests, 0 leaks, on
+FPC 3.2.2 Windows and Delphi 12 Win32/Win64. Next: step 5
 (amqp, then kafka). Phase K0 of pascal-kafka-faa's `docs/design.md` (its decision 1, taken by the user on
 2026-11-01: "vamos extrair"). The user accepted decisions T1–T8 as recommended the same day
 ("segue recomendados"). Where step 1 stands: "Step 1, TCP" below.
