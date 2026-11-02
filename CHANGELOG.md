@@ -6,10 +6,14 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.27.0] - 2026-11-01
+
 ### Added
 
-On the `transport` branch, not released until pascal-pipes-faa and pascal-redis-faa pass their
-suites on it (`docs/transport-design.md`, decision T8); the API may still change.
+The TCP and TLS transport of `docs/transport-design.md` (pascal-kafka-faa's decision 1), from
+pascal-pipes-faa's, translated. Released once pascal-pipes-faa and pascal-redis-faa passed their
+whole suites on it, on both compilers (decision T8); the two items at the end came from those
+migrations.
 
 - `PascalCommon.Transport`: the transport contract. `TPcEndpoint` (`Read`, `WriteExactly`,
   `CloseAbort` from any thread, `SetIoDeadline`, `TryPeerAddress`, `TryPeerIdentity`,
