@@ -896,6 +896,15 @@ begin
   begin
     if LReadMore or (FCipherLen = 0) then
       RecvRaw;
+    // A TLS client's first byte is a handshake record (0x16). Anything else
+    // (a plaintext client on a TLS port: amqp's protocol header, an HTTP
+    // request) is refused now. AcceptSecurityContext would read it as the
+    // header of a record still incomplete and wait for the rest until the
+    // handshake deadline (15 s, measured by pascal-amqp-faa), where OpenSSL
+    // refuses at once (1.27.1).
+    if (not FCtxtValid) and (FCipher[0] <> $16) then
+      raise EPcTls.CreateFmt('not a TLS client: the first byte is 0x%.2x, ' +
+        'not a handshake record (0x16)', [FCipher[0]]);
     LInBuf[0].cbBuffer := FCipherLen;
     LInBuf[0].BufferType := SECBUFFER_TOKEN;
     LInBuf[0].pvBuffer := @FCipher[0];

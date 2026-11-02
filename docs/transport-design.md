@@ -4,8 +4,8 @@ Status: **released in 1.27.0 (2026-11-01, step 4).** Steps 1 to 3 done on both c
 this library, then pascal-pipes-faa and pascal-redis-faa moved onto it; before the release
 pipes ran again on step 3's change (FPC Windows, Linux with OpenSSL 3 and 1.1.1, Delphi 12
 Win32/Win64), and this library's suite ran on the release commit: 559 tests, 0 leaks, on
-FPC 3.2.2 Windows and Delphi 12 Win32/Win64. Next: step 5
-(amqp, then kafka). Phase K0 of pascal-kafka-faa's `docs/design.md` (its decision 1, taken by the user on
+FPC 3.2.2 Windows and Delphi 12 Win32/Win64. Step 5: amqp done (pascal-amqp-faa 0.6.0,
+2026-11-02, "Step 5, amqp" below); kafka next. Phase K0 of pascal-kafka-faa's `docs/design.md` (its decision 1, taken by the user on
 2026-11-01: "vamos extrair"). The user accepted decisions T1–T8 as recommended the same day
 ("segue recomendados"). Where step 1 stands: "Step 1, TCP" below.
 
@@ -392,6 +392,48 @@ It has two now, against a listener in the process that accepts and never reads (
 `DEBUG SLEEP` disabled). A fixed write of 64 MB didn't block on Windows loopback, even with
 the connection accepted: the tests write 16 MB chunks until the deadline fires, as
 `TEndlessWriter` does here (32 MB went through in one measured run).
+
+## Step 5, amqp (2026-11-02)
+
+pascal-amqp-faa 0.6.0 runs on these units, client and broker (its `docs/broker-worklog.md`,
+section v0.6.0). The client connects with `PcTcpConnect` + `PcTlsWrap`; the broker listens with
+`PcTcpListen`/`PcTlsListen` and calls `Handshake` on each connection's own thread. Both read and
+write through `TAMQPEndpointStream`, a `TPcEndpointStream` subclass that is the exception
+boundary (T6): `EPcTransportClosed` on read becomes a 0-byte read, so amqp's frame reader still
+raises its own EOF; `EPcTls` becomes `EAMQPTls`, any other `EPcTransport` `EAMQPTransport`. No
+socket deadline is set (AMQP has heartbeats); only the connect budget and the handshake's
+default remain. `TAMQPConnectionParams` gained `TlsCaFile`, `TlsCertFile`, `TlsKeyFile`,
+`TlsCertPassword`, `TlsBackend` and `ConnectTimeoutMs`; the broker gained server TLS on SChannel
+(PFX) and mTLS. `AMQP_OPENSSL` only changes the default (T3). amqp's own sockets are gone; its
+two TLS units are empty wrappers for one minor version.
+
+Measured on amqp: FPC 3.2.2 Windows x64, Default and openssl modes: 145 unit, 509 server (its
+broker TLS fixture, 9 tests, runs for four backend pairs in one run), 48 integration against
+RabbitMQ (TLS against a real 5671), 48 acceptance in both passes, 8 outbox, 0 leaks. FPC 3.2.2
+Linux (Debian 12, OpenSSL 3): the same with 482 server tests, 0 leaks; FPC 3.2.0 on Debian 11
+(OpenSSL 1.1.1): the same except the outbox suite, which pascal-db-faa doesn't build there
+(`mysql80conn`). Delphi 12 Win32 and Win64, Debug and OpenSSL: 145, 509, 48, 48 x2, 8, 0 leaks.
+
+What worked as documented: subclassing `TPcEndpointStream` as the T6 boundary; a connection
+reset arriving as `EPcTransportClosed` on both platforms; `CloseAbort` unblocking a handshake in
+progress; port 0 and `TPcListener.Port` (T1).
+
+Found while migrating (amqp's `.ci/transport-findings-for-pascal-common-faa.md`), and what was
+decided here the same day:
+
+- **SChannel server and a plaintext client.** A client that sends amqp's 8-byte protocol header
+  to a TLS port waits out the whole handshake deadline (15.08 s) with an SChannel server, while
+  OpenSSL refuses at once (0.04 s). *Fixed in 1.27.1:* the SChannel server refuses at once
+  (`EPcTls`) when the first byte isn't a handshake record (0x16). That changes the exception's
+  class for that client (it was `EPcTransportTimeout`), treated as a bug fix: the two backends
+  now answer alike.
+- **TCP_NODELAY can't be read back from an endpoint**, and this library had no test that it is
+  on. amqp guards it with a round-trip latency test over `PcTcpListen`/`PcTcpConnect` (20 rounds
+  of write-write-read under 400 ms; 9 ms measured on Linux, 1634 ms with Nagle on). *Taken in
+  1.27.1* as `NoDelay_SmallWritesDontWaitForAcks` (tests only).
+- **The listen backlog isn't configurable** (`PC_LISTEN_BACKLOG`); amqp keeps its `Backlog`
+  property, documented as ignored. *No action* until a library needs it (it would be an
+  addition: a field in `TPcTcpOptions`).
 
 ## Sources
 

@@ -6,6 +6,25 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.27.1] - 2026-11-02
+
+### Fixed
+
+Found by pascal-amqp-faa's migration onto the transport (`docs/transport-design.md`, "Step 5,
+amqp").
+
+- The SChannel TLS server refuses a plaintext client at once (`EPcTls`: the first byte isn't a
+  handshake record, 0x16) instead of waiting out the handshake deadline (15 s by default) and
+  raising `EPcTransportTimeout`. OpenSSL already refused at once; both backends now answer
+  alike. A caller that caught the timeout for that case now gets `EPcTls`.
+
+### Tests
+
+- `NoDelay_SmallWritesDontWaitForAcks`: TCP_NODELAY can't be read back from an endpoint, so
+  its effect is checked (20 rounds of write-write-read under 400 ms; with Nagle on, 833 ms on
+  Linux). From pascal-amqp-faa's guard.
+- `Handshake_PlaintextClient_RefusedAtOnce`, for each pair of TLS backends.
+
 ## [1.27.0] - 2026-11-01
 
 ### Added

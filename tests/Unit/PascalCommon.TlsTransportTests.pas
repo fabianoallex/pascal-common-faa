@@ -89,6 +89,7 @@ type
     [Test] procedure NoMtls_NoIdentity;
     [Test] procedure Handshake_SilentClient_ServerTimesOut;
     [Test] procedure Handshake_SilentServer_ClientTimesOut;
+    [Test] procedure Handshake_PlaintextClient_RefusedAtOnce;
     [Test] procedure FullDuplexBulk_OverTls;
     [Test] procedure CloseAbort_UnblocksATlsReader;
     [Test] procedure PeerClosing_ReadRaisesClosed;
@@ -770,6 +771,36 @@ begin
   TAssert.AssertTrue('expected a timeout, got ' + LError,
     Pos(EPcTransportTimeout.ClassName + ':', LError) = 1);
   TAssert.AssertTrue('took ' + IntToStr(LElapsed) + ' ms', LElapsed < 5000);
+end;
+
+procedure TTlsTransportTests.Handshake_PlaintextClient_RefusedAtOnce;
+const
+  CAmqpHeader: array[0..7] of Byte = (Ord('A'), Ord('M'), Ord('Q'), Ord('P'),
+    0, 0, 9, 1);
+var
+  LRaw: TPcEndpoint;
+  LServerError: string;
+  T0, LElapsed: UInt64;
+begin
+  if not Ready then
+    Exit;
+  // A plaintext client on a TLS port (amqp's protocol header). Both
+  // backends refuse at once; SChannel used to wait out the whole handshake
+  // deadline (1.27.1; pascal-amqp-faa's migration, step 5).
+  StartServer('', 10000);
+  LRaw := PcTcpConnect('127.0.0.1', FListener.Port, TcpOpts);
+  try
+    T0 := PcTickMs;
+    LRaw.WriteExactly(CAmqpHeader[0], Length(CAmqpHeader));
+    LServerError := ServerResult;
+    LElapsed := PcTickMs - T0;
+  finally
+    LRaw.Free;
+  end;
+  TAssert.AssertTrue('expected EPcTls, got ' + LServerError,
+    Pos(EPcTls.ClassName + ':', LServerError) = 1);
+  TAssert.AssertTrue('refused after ' + IntToStr(LElapsed) + ' ms',
+    LElapsed < 3000);
 end;
 
 procedure TTlsTransportTests.FullDuplexBulk_OverTls;

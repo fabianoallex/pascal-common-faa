@@ -77,6 +77,7 @@ type
     [Test] procedure Connect_ClosedPort_IsRefused;
     [Test] procedure Connect_UnresolvableName_Raises;
     [Test] procedure Listen_PortInUse_Raises;
+    [Test] procedure NoDelay_SmallWritesDontWaitForAcks;
   end;
 
 implementation
@@ -178,6 +179,17 @@ type
   public
     constructor Create(AEndpoint: TPcEndpoint; ARounds: Integer);
     property Replies: Integer read FReplies;
+  end;
+
+  { Server side of the latency test: per round, reads two one-byte writes
+    and answers one byte. }
+  TEchoRounds = class(TIoThread)
+  private
+    FRounds: Integer;
+  protected
+    procedure Work; override;
+  public
+    constructor Create(AEndpoint: TPcEndpoint; ARounds: Integer);
   end;
 
 function PatternByte(AIndex: Int64; ASeed: Byte): Byte;
@@ -402,6 +414,26 @@ begin
   begin
     FEndpoint.Read(LByte, 1);
     Inc(FReplies);
+  end;
+end;
+
+constructor TEchoRounds.Create(AEndpoint: TPcEndpoint; ARounds: Integer);
+begin
+  FRounds := ARounds;
+  inherited Create(AEndpoint);
+end;
+
+procedure TEchoRounds.Work;
+var
+  LBuf: array[0..1] of Byte;
+  LGot, LRound: Integer;
+begin
+  for LRound := 1 to FRounds do
+  begin
+    LGot := 0;
+    while LGot < 2 do
+      Inc(LGot, FEndpoint.Read(LBuf[LGot], 2 - LGot));
+    FEndpoint.WriteExactly(LBuf[0], 1);
   end;
 end;
 
@@ -990,6 +1022,46 @@ begin
     LSecond.Free;
   end;
   TAssert.AssertEquals(EPcTransport.ClassName, LClass);
+end;
+
+procedure TTcpTransportTests.NoDelay_SmallWritesDontWaitForAcks;
+const
+  CRounds = 20;
+var
+  LEcho: TEchoRounds;
+  LByte: Byte;
+  LRound: Integer;
+  T0, LElapsed: UInt64;
+begin
+  // TCP_NODELAY can't be read back from an endpoint, so its effect is what
+  // is checked. Two small writes then a read is the case Nagle's algorithm
+  // and delayed ACKs stall: the second write waits for the ACK of the first,
+  // which the peer delays (about 40 ms per round on Linux). From
+  // pascal-amqp-faa's guard (its migration, step 5): 9 ms measured on Linux,
+  // 1634 ms with Nagle on. Windows loopback hides it (it passes either way
+  // there); Linux is where this test bites.
+  OpenLoopback('127.0.0.1');
+  LEcho := TEchoRounds.Create(FServerEp, CRounds);
+  try
+    T0 := PcTickMs;
+    for LRound := 1 to CRounds do
+    begin
+      LByte := 1;
+      FClientEp.WriteExactly(LByte, 1);
+      LByte := 2;
+      FClientEp.WriteExactly(LByte, 1);
+      FClientEp.Read(LByte, 1);
+    end;
+    LElapsed := PcTickMs - T0;
+    if LEcho.Done.WaitFor(CWaitMs) <> wrSignaled then
+      FServerEp.CloseAbort;
+    LEcho.WaitFor;
+    TAssert.AssertEquals('echo', '', LEcho.ErrorClass);
+    TAssert.AssertTrue(Format('%d rounds took %d ms: is TCP_NODELAY off?',
+      [CRounds, LElapsed]), LElapsed < 400);
+  finally
+    LEcho.Free;
+  end;
 end;
 
 initialization
