@@ -6,6 +6,29 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.28.0] - 2026-11-03
+
+### Added
+
+For pascal-kafka-faa's SCRAM-SHA-512 (its `docs/design.md`, K3 step 5), in
+`PascalCommon.Crypto`, next to the SHA-256 side and in the same shapes:
+
+- `TPcSha512Digest`, `PcSha512` (FIPS 180-4) and `PcSha512DigestToBytes` (a name of its own
+  rather than a `PcDigestToBytes` overload, so `@PcDigestToBytes` stays unambiguous).
+- `PcHmacSha512` (RFC 2104; a key over 128 bytes is hashed first), through the inner and outer
+  states computed once from the key.
+- `PcPbkdf2HmacSha512` (RFC 8018), the contract of `PcPbkdf2HmacSha256` with 64-byte blocks:
+  each iteration costs two compressions and no allocation; `EArgumentException` below 1
+  iteration or 1 byte.
+
+### Tests
+
+- FIPS 180-4's SHA-512 examples (empty, "abc", 896 bits, a million "a"), lengths around the
+  128-byte block and its 112-byte padding limit; RFC 4231 cases 1-4, 6 and 7; HMAC keys of 128
+  and 129 bytes; the RFC 6070 inputs on SHA-512 and keys and salts around the block (values from
+  Python's hashlib); HMAC checked against its definition on `PcSha512` and PBKDF2 against its
+  definition on `PcHmacSha512`.
+
 ## [1.27.1] - 2026-11-02
 
 ### Fixed
