@@ -146,8 +146,9 @@ Cost: one read of the counters per `Key` (`MGET` of every tag, one round trip) o
 value's `GET`. A Lua script could do both in one round trip; measure before adding it. Keys with
 no tags read no counter.
 
-Memory store: the counters are a dictionary in the process, lost together with the values, so
-the reset problem doesn't arise.
+Memory store: the counters are a dictionary in the process, lost together with the values on a
+restart. It drops counters while running, to bound them (C8), so it has the same reset problem
+and solves it the same way, with a sequence instead of the clock.
 
 ### C5 — `GetOrLoad`: single-flight in the process (recommended)
 
@@ -210,7 +211,17 @@ itself (it has none today); it would also fit the outbox. Not part of this desig
   with a real workload, not to assume;
 - one lock (`TCriticalSection`) for the dictionary; shards only if contention is measured;
 - `AMaxEntries = 0`: stores nothing (every read misses), for a configuration that turns the cache
-  off without `nil` checks.
+  off without `nil` checks. It also keeps **no tag counters**: `Generations` returns 0 for every
+  tag and `Bump` does nothing, otherwise a tag per row (`product:123`) would grow a dictionary in
+  a cache that is off. Single-flight and the metrics still work (`TPcCache` doesn't know the
+  store is off): concurrent misses of one key still make one load, and the metrics show every
+  read missing.
+- **Tag counters are bounded too.** A new counter starts at the next value of one sequence for
+  the whole store, not at 0, so a counter created again is always larger than any value a counter
+  had before (the same guarantee as C4's clock start on Redis, without the clock). That makes
+  dropping a counter safe at any time: the only cost is that the keys built with it miss once.
+  When the counters reach their limit (`AMaxEntries` by default), `Generations` drops counters
+  before creating one, those not read or bumped for longest first.
 
 ### C9 — metrics (recommended)
 
@@ -295,7 +306,9 @@ FCache := TPcCache.Create(LStore, 'app');
   runs once, every thread gets its value; a loader that raises reaches every thread and stores
   nothing); the failure policy with a fake store that raises `EPcCacheUnavailable` (miss, ignored
   `Put`, `OnError`, the pause, then a retry) and one that raises something else (propagates);
-  `AMaxEntries = 0`.
+  `AMaxEntries = 0` (every read misses, no counter is kept after many distinct tags, a load still
+  runs once for concurrent misses); the counter limit (a dropped counter comes back larger, and
+  an entry written under its old value isn't read).
 - **pascal-redis-faa**, against its Redis container: the same store cases; a counter deleted
   (as eviction would) comes back larger than any value it had and an entry written before isn't
   read; the error mapping with the server stopped.
