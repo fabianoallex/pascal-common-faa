@@ -70,6 +70,8 @@ The value is a `string`, in practice JSON from pascal-jsonmapper-faa. It matches
 applications already serialize DTOs and keeps the Redis store to `SetEx`/`TryGet` as they are.
 On FPC that `string` is UTF-8 under the runtime rule every `*-faa` application already follows
 (a UTF-8 default code page); the Redis store sends and reads its bytes as they are.
+Checked in F2: `'São Paulo'` makes the round trip byte for byte through Redis (read as bytes
+on the server, both ways) on FPC Windows and Linux and on Delphi 12 Win32 and Win64.
 
 Alternative: `TBytes`, which takes binary formats too, at the cost of a conversion on every call
 for the JSON case. Adding a `TBytes` pair later is additive.
@@ -473,9 +475,6 @@ FCache := TPcCache.Create(LStore, 'app');
 - C8: lock contention of the memory store with 8 to 32 threads; insertion order against G-Clock
   on a hit rate taken from an application.
 - C5: the cost of the per-key entry when there are many distinct keys at once.
-- C2: a value with non-ASCII text through Redis on FPC/Linux and Delphi (round trip byte for
-  byte). FPC on Windows and Linux done in F2 (`'São Paulo'` checked as bytes on the server, both
-  ways) and on Delphi 12 Win32 and Win64.
 
 ## Phases
 
