@@ -136,13 +136,16 @@ data from the database, writes it under `...|12`; once the counter is 13 nobody 
 What is left is the time between the commit and the `INCR` (C7), during which readers still get
 the old entry.
 
-Counters on Redis: no TTL, and **a missing counter starts at the current Unix time in
-milliseconds, not at 0** (created with `SET NX`, then read). If Redis evicts or loses a counter
+Counters on Redis: **a TTL, a day by default** (decided after F3, see "Decided after F3"; until
+pascal-redis-faa 0.5.0 they had none), and **a missing counter starts at the current Unix time in
+milliseconds, not at 0** (created with `SET NX PX`, then read). If Redis evicts or loses a counter
 (restart without persistence, `maxmemory` eviction), starting again at 0 would bring back entries
 written under 0, 1, 2... that are still within their TTL. Starting at the clock makes a reborn
 counter larger than any value it had, as long as that tag was invalidated fewer than 1000 times a
 second on average since its counter was created (a counter that started at T0 and was bumped n
 times is at T0 + n; one reborn at T1 is larger when n < T1 − T0 in ms). See "Open points".
+With the TTL, rebirth is routine (once per counter lifetime), not only after an eviction; the
+argument is the same, see "Decided after F3".
 
 Cost: one read of the counters per `Key` (`MGET` of every tag, one round trip) on top of the
 value's `GET`. A Lua script could do both in one round trip; measure before adding it. Keys with
@@ -242,7 +245,10 @@ database query) already has pascal-db-faa's.
   or a password hash is the application's bug; hash it first (`PcSha256`) if it must depend on
   one.
 - Tags are few per key (each one is a counter read); a tag per row (`product:123`) is fine, a
-  dozen tags per key is a sign of the wrong granularity.
+  dozen tags per key is a sign of the wrong granularity. A tag built from what a client sends
+  (an id it chooses) creates a counter per distinct value: bounded in memory (C8), and on Redis
+  by the counters' TTL ("Decided after F3"), so their number is what clients send in a day,
+  not forever.
 
 ### C11 — pascal-db-faa: nothing in the first phases (recommended)
 
@@ -317,7 +323,7 @@ it showed is written down here; the catalog doesn't work around any of it.
     that is down) and `Put` creates the counters. The first read of a key would then miss twice.
   - (c) leave it, documented (what pascal-api-infra-faa 0.32.0 does: the class comment says so).
 
-  Recommendation: (a).
+  Recommendation: (a). **Decided: (a)**, see "Decided after F3".
 - **`GetOrLoad` can't leave a result out.** It stores whatever the loader returns (C5: "not
   found" is the application's to encode). A cache of found answers only has no value to store
   for a miss, so the catalog uses `TryGet` + `Put` and loses single-flight: requests that miss one
@@ -325,16 +331,18 @@ it showed is written down here; the catalog doesn't work around any of it.
   so it doesn't matter there). A loader that can say "don't store this"
   (`function(const AArg: string; out AValue: string): Boolean`, False: nothing stored, the
   caller told) would keep single-flight for such a cache. Additive; not needed yet.
+  **Decided: not now**; added to this library when a cache needs it.
 - **A tag on every key can't also be what drops the aggregates.** The catalog's keys are each
   tenant (tags `tenants`, `tenant:<id>`) and the list of all (`tenants`). `Invalidate(id)` must
   drop that tenant and the list and keep every other tenant; moving `tenants` drops them all, so
   the list has a tag of its own (`tenants.list`) that a change to any tenant moves. Not a
   problem of the contract; a pattern for "Usage": one tag for everything, one per item, one per
-  aggregate that a change to any item invalidates.
+  aggregate that a change to any item invalidates. **Written in "Usage"**.
 - **A hit on Redis is two round trips** (`MGET` of the tags, then `GET`). The catalog is read on
   every authenticated request; its old dictionary cost none. Not measured end to end; the pair
   in one script (C4's open point) would make it one. With the catalog's own memory store (its
-  default), there is no round trip.
+  default), there is no round trip. **Decided: measure first** (open point); joining them
+  changes the store's contract, here and in pascal-redis-faa, so only with a number.
 - **What worked as designed.** The failure policy needed no code in the catalog: a store down is
   a miss, `OnError` once, then the pause; `Invalidate` doesn't raise. Measured through
   pascal-api-infra-faa's messaging guide (FPC 3.2.2/Windows, Redis unreachable, nothing on the
@@ -347,6 +355,33 @@ it showed is written down here; the catalog doesn't work around any of it.
   which retires the Pub/Sub the catalog's comment suggested. Values as strings (C2): the catalog
   writes its record as JSON with pascal-jsonmapper-faa's writer and parser (the mapper reads
   classes; the tenant is a record), and a value that doesn't decode is a miss.
+
+## Decided after F3 (2026-11-04)
+
+**Tag counters on Redis expire** (option (a) of "Found in F3"). `TRedisCacheStore` creates a
+missing counter with `SET NX PX <CounterTtlMs>` (a constructor parameter, one day by default),
+from the clock as before; `Bump`'s `INCR` keeps the TTL the counter has (Redis' `INCR` doesn't
+touch it). A read doesn't renew it: a counter read all day still expires once a day, at the cost
+of one miss per key built with it.
+
+Why it is safe: C4's argument. A counter that expires is born again at the creating client's
+clock, above any value it had, so entries written under the old values are never read. That now
+happens every day instead of only after an eviction, so the conditions are worth stating:
+
+- the clocks of the instances that create counters differ by much less than the counter TTL
+  (a counter that expired was created at least that long ago, by another instance maybe);
+- a tag was invalidated fewer than 1000 times a second on average over its counter's life (as
+  in C4; with a day's TTL, fewer than 86.4 million times in that day).
+
+The counter TTL should be longer than the values' TTLs, or every value is missed when its
+counter expires; a day is longer than any TTL seen so far. A counter evicted earlier by
+`maxmemory` is the case C4 already covered. The memory store is unchanged: its counters are
+bounded by number (C8).
+
+Phases: pascal-redis-faa (`CounterTtlMs`, tests: a counter is created with a TTL; one that
+expired comes back larger; an entry written under the old value isn't read through `TPcCache`),
+then pascal-api-infra-faa 0.32.1 (the submodule, and the catalog's class comment, which says
+counters stay for good). No change to `IPcCacheStore` or `TPcCache`.
 
 ## Usage
 
@@ -379,6 +414,22 @@ begin
 end;
 
 LJson := FCache.GetOrLoad(LKey, 300, LoadCategory, IntToStr(ACategoryId));
+```
+
+Tags for items and aggregates: one tag for everything (`tenants`), one per item
+(`tenant:acme`), and one per aggregate that a change to any item must drop (`tenants.list`). A
+change to one item invalidates its own tag and the aggregates' tags; invalidating the tag for
+everything drops every item, which is right only for a change to all of them.
+
+```pascal
+// An item and the list of all: both tagged with "tenants" (everything).
+LKey := FCache.Key('tenant:' + AId, ['tenants', 'tenant:' + AId]);
+LListKey := FCache.Key('tenants.all', ['tenants', 'tenants.list']);
+
+// One tenant changed: that tenant and the list, the other tenants stay.
+FCache.Invalidate(['tenant:' + AId, 'tenants.list']);
+// Every tenant changed (a reload):
+FCache.Invalidate(['tenants']);
 ```
 
 Composition root:
@@ -432,6 +483,7 @@ FCache := TPcCache.Create(LStore, 'app');
 | F1 | here | `PascalCommon.Cache`: contracts, `TPcCache`, `TPcMemoryCacheStore`, tests | suites green on FPC (Windows, Linux x86_64 and i386) and Delphi 12 CE Win32/Win64, 0 leaks; minor release — **FPC done 2026-11-04 (1.29.0)**: 605/605 on Windows x64, 527/527 on Linux x86_64 and i386 (26 cache tests), 0 leaks; 40 runs of the cache suite green at `--cpus=1` with 8 containers at once. Delphi 12 CE Win32 and Win64: 605/605, 0 leaks |
 | F2 | pascal-redis-faa | `Redis.Cache` (`TRedisCacheStore`) on that release | its integration tests green against Redis, Linux and Windows — **FPC done 2026-11-04 (pascal-redis-faa 0.5.0)**: 11 cache tests, integration 87/87 on Windows x64 and Linux x86_64, 0 leaks; 20 runs at `--cpus=1` with 4 containers at once. `Generations` is `MGET` (a missing counter: `SET NX` from the client's clock and the `MGET` of the missing ones in the same pipeline); `Bump` is a Lua script that increments only a counter that exists, so a missing one stays missing. Delphi 12 CE Win32 and Win64 (Debug and OpenSSL): integration 87/87, 0 leaks. Its `docs/DECISOES.md`, section 54 |
 | F3 | pascal-api-infra-faa | `TCachedTenantCatalog` on `IPcCache`; the messaging guide's example rewritten | its suites green; first consumer of the contract — **Done 2026-11-04 (pascal-api-infra-faa 0.32.0)**: FPC: 503 unit tests (9 for the catalog) on Windows x64 and Linux, 0 leaks; HTTP scenarios green, sample 03 with the catalog in Redis on two instances. What it showed: "Found in F3". Delphi 12 CE Win32 and Win64: 503/503, 0 leaks, HTTP scenarios green (the catalog in Redis on two instances too) |
+| F2.1 | pascal-redis-faa, then pascal-api-infra-faa | Tag counters with a TTL ("Decided after F3"); then pascal-api-infra-faa 0.32.1 on it | pascal-redis-faa's integration tests green on FPC (Windows, Linux) and Delphi Win32/Win64, 0 leaks; pascal-api-infra-faa's suites green |
 | F4 | pascal-db-faa | C11, only if an application needs raw rows cached | — |
 
 ## Sources
