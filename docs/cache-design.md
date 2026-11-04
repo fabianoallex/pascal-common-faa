@@ -358,19 +358,24 @@ FCache := TPcCache.Create(LStore, 'app');
 - C4: the clock start of a reborn counter against a tag invalidated more than 1000 times a
   second on average (its counter passes the clock); if it matters, start at `max(clock, last seen)` kept by
   the process, or use a random 63-bit start.
-- C4: `MGET` + `GET` (two round trips) against one Lua script, on a real network.
+- C4: `MGET` + `GET` (two round trips) against one Lua script, on a real network. Measured in
+  F2 for the store alone (pascal-redis-faa, Docker Desktop on Windows, ~0.5 ms a round trip):
+  `MGET`, a read-and-create script and `MULTI`/`SET NX`/`INCR`/`EXEC` all cost one round trip,
+  no difference above the noise, so the store reads with `MGET`. The `MGET` + `GET` pair in one
+  script is `TPcCache`'s and was not measured.
 - C8: lock contention of the memory store with 8 to 32 threads; insertion order against G-Clock
   on a hit rate taken from an application.
 - C5: the cost of the per-key entry when there are many distinct keys at once.
 - C2: a value with non-ASCII text through Redis on FPC/Linux and Delphi (round trip byte for
-  byte).
+  byte). FPC on Windows and Linux done in F2 (`'São Paulo'` checked as bytes on the server, both
+  ways) and on Delphi 12 Win32 and Win64.
 
 ## Phases
 
 | Phase | Where | What | Done when |
 |---|---|---|---|
 | F1 | here | `PascalCommon.Cache`: contracts, `TPcCache`, `TPcMemoryCacheStore`, tests | suites green on FPC (Windows, Linux x86_64 and i386) and Delphi 12 CE Win32/Win64, 0 leaks; minor release — **FPC done 2026-11-04 (1.29.0)**: 605/605 on Windows x64, 527/527 on Linux x86_64 and i386 (26 cache tests), 0 leaks; 40 runs of the cache suite green at `--cpus=1` with 8 containers at once. Delphi 12 CE Win32 and Win64: 605/605, 0 leaks |
-| F2 | pascal-redis-faa | `Redis.Cache` (`TRedisCacheStore`) on that release | its integration tests green against Redis, Linux and Windows |
+| F2 | pascal-redis-faa | `Redis.Cache` (`TRedisCacheStore`) on that release | its integration tests green against Redis, Linux and Windows — **FPC done 2026-11-04 (pascal-redis-faa 0.5.0)**: 11 cache tests, integration 87/87 on Windows x64 and Linux x86_64, 0 leaks; 20 runs at `--cpus=1` with 4 containers at once. `Generations` is `MGET` (a missing counter: `SET NX` from the client's clock and the `MGET` of the missing ones in the same pipeline); `Bump` is a Lua script that increments only a counter that exists, so a missing one stays missing. Delphi 12 CE Win32 and Win64 (Debug and OpenSSL): integration 87/87, 0 leaks. Its `docs/DECISOES.md`, section 54 |
 | F3 | pascal-api-infra-faa | `TCachedTenantCatalog` on `IPcCache`; the messaging guide's example rewritten | its suites green; first consumer of the contract |
 | F4 | pascal-db-faa | C11, only if an application needs raw rows cached | — |
 
