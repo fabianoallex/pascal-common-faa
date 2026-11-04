@@ -1,11 +1,12 @@
 # Cache with expiry and tag invalidation — design
 
-Status: **F1 done, 2026-11-04 (1.29.0)**: `PascalCommon.Cache`, green on Windows x64 and
-Linux x86_64 and i386, 0 leaks, 40 runs of its suite at `--cpus=1` with 8 containers at once;
-Delphi 12 CE Win32 and Win64 605/605, 0 leaks. Designed 2026-11-03: the user accepted every recommendation below as
-written ("tudo conforme sugerido", 2026-11-03), C12 included. What F1 settled that the design
-had left open is in "Decided in F1" below. Nothing is measured yet; the numbers quoted come
-from other documents, each named where it is used.
+Status: **F1 to F3 and F2.1 done, 2026-11-04**: `PascalCommon.Cache` here (1.29.0), the Redis
+store in pascal-redis-faa (0.5.0; counters with a TTL in 0.6.0), and its first consumer,
+pascal-api-infra-faa's `TCachedTenantCatalog` (0.32.0, 0.32.1); each one green on FPC and
+Delphi, 0 leaks (details in "Phases"). F4 waits for a need. Designed 2026-11-03: the user
+accepted every recommendation below as written ("tudo conforme sugerido", 2026-11-03), C12
+included. What the phases settled is in "Decided in F1", "Found in F3" and "Decided after F3";
+what is still to measure, in "Open points to measure".
 
 ## Where this came from
 
