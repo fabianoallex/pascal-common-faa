@@ -293,6 +293,61 @@ pascal-api-infra-faa's tenant catalog as the first consumer to validate the cont
 - **For the Redis store (F2)**: `Bump` of a missing counter must not create it at 1 (`INCR` on a
   missing key does); create it from the clock as C4 says, or leave it missing.
 
+## Found in F3 (2026-11-04)
+
+pascal-api-infra-faa's `TCachedTenantCatalog` (0.32.0), the first consumer of the contract. What
+it showed is written down here; the catalog doesn't work around any of it.
+
+- **Reading a key creates its tags' counters, and on Redis they never go away.** `Key` reads
+  `Generations`, which creates a missing counter (C4; `TRedisCacheStore`: `SET NX`, no TTL). When
+  a tag comes from client input, every distinct value a client sends leaves one key in Redis for
+  good, even when no value is ever stored under it. The catalog's case: `Find` builds its key
+  with the tag `tenant:<id>` before it knows whether the tenant exists, and it stores found
+  tenants only (a login can name any id), so each unknown id a client tries leaves a counter
+  `<name>:tag:tenant:<id>`. The memory store bounds its counters (C8); Redis doesn't. C10's "a
+  tag per row is fine" holds for rows that exist, not for ids a client chooses. The catalog
+  limits what an id can be (`ValidTenantId`: `[a-z0-9-]`, 1 to 40 characters), not how many.
+  Options, for the user to decide (none taken):
+  - (a) **a TTL on the counters in Redis** (a day, say), set when one is created. Safe by C4's own
+    argument: a counter that expires is born again from the clock, above any value it had, so
+    entries written under the old value are never read; the cost is one miss per key per counter
+    lifetime. A counter that is read often could have its TTL renewed, at the price of a write on
+    a read.
+  - (b) `Generations` doesn't create a missing counter: `Key` returns `''` (a miss, as with a store
+    that is down) and `Put` creates the counters. The first read of a key would then miss twice.
+  - (c) leave it, documented (what pascal-api-infra-faa 0.32.0 does: the class comment says so).
+
+  Recommendation: (a).
+- **`GetOrLoad` can't leave a result out.** It stores whatever the loader returns (C5: "not
+  found" is the application's to encode). A cache of found answers only has no value to store
+  for a miss, so the catalog uses `TryGet` + `Put` and loses single-flight: requests that miss one
+  tenant at once each query the control database, as before the cache (once per tenant per TTL,
+  so it doesn't matter there). A loader that can say "don't store this"
+  (`function(const AArg: string; out AValue: string): Boolean`, False: nothing stored, the
+  caller told) would keep single-flight for such a cache. Additive; not needed yet.
+- **A tag on every key can't also be what drops the aggregates.** The catalog's keys are each
+  tenant (tags `tenants`, `tenant:<id>`) and the list of all (`tenants`). `Invalidate(id)` must
+  drop that tenant and the list and keep every other tenant; moving `tenants` drops them all, so
+  the list has a tag of its own (`tenants.list`) that a change to any tenant moves. Not a
+  problem of the contract; a pattern for "Usage": one tag for everything, one per item, one per
+  aggregate that a change to any item invalidates.
+- **A hit on Redis is two round trips** (`MGET` of the tags, then `GET`). The catalog is read on
+  every authenticated request; its old dictionary cost none. Not measured end to end; the pair
+  in one script (C4's open point) would make it one. With the catalog's own memory store (its
+  default), there is no round trip.
+- **What worked as designed.** The failure policy needed no code in the catalog: a store down is
+  a miss, `OnError` once, then the pause; `Invalidate` doesn't raise. Measured through
+  pascal-api-infra-faa's messaging guide (FPC 3.2.2/Windows, Redis unreachable, nothing on the
+  port): the first request paid the connect attempt, about 2 s per address the host resolves to
+  (4.1 s for `localhost`, `::1` then `127.0.0.1`; 2.0 s for `127.0.0.1`), the next ones within the
+  1 s pause took 3 ms, the first after it paid again; without the cache every request paid it.
+  So C6's "about 2 s on every request" is per address, and the pause makes it one request per
+  pause-plus-attempt. `Key` returning `''` needed no special case (the read misses, `Put` does
+  nothing). Two catalogs on one `IPcCache` see each other's `Invalidate` (a unit test there),
+  which retires the Pub/Sub the catalog's comment suggested. Values as strings (C2): the catalog
+  writes its record as JSON with pascal-jsonmapper-faa's writer and parser (the mapper reads
+  classes; the tenant is a record), and a value that doesn't decode is a miss.
+
 ## Usage
 
 ```pascal
@@ -376,7 +431,7 @@ FCache := TPcCache.Create(LStore, 'app');
 |---|---|---|---|
 | F1 | here | `PascalCommon.Cache`: contracts, `TPcCache`, `TPcMemoryCacheStore`, tests | suites green on FPC (Windows, Linux x86_64 and i386) and Delphi 12 CE Win32/Win64, 0 leaks; minor release — **FPC done 2026-11-04 (1.29.0)**: 605/605 on Windows x64, 527/527 on Linux x86_64 and i386 (26 cache tests), 0 leaks; 40 runs of the cache suite green at `--cpus=1` with 8 containers at once. Delphi 12 CE Win32 and Win64: 605/605, 0 leaks |
 | F2 | pascal-redis-faa | `Redis.Cache` (`TRedisCacheStore`) on that release | its integration tests green against Redis, Linux and Windows — **FPC done 2026-11-04 (pascal-redis-faa 0.5.0)**: 11 cache tests, integration 87/87 on Windows x64 and Linux x86_64, 0 leaks; 20 runs at `--cpus=1` with 4 containers at once. `Generations` is `MGET` (a missing counter: `SET NX` from the client's clock and the `MGET` of the missing ones in the same pipeline); `Bump` is a Lua script that increments only a counter that exists, so a missing one stays missing. Delphi 12 CE Win32 and Win64 (Debug and OpenSSL): integration 87/87, 0 leaks. Its `docs/DECISOES.md`, section 54 |
-| F3 | pascal-api-infra-faa | `TCachedTenantCatalog` on `IPcCache`; the messaging guide's example rewritten | its suites green; first consumer of the contract |
+| F3 | pascal-api-infra-faa | `TCachedTenantCatalog` on `IPcCache`; the messaging guide's example rewritten | its suites green; first consumer of the contract — **Done 2026-11-04 (pascal-api-infra-faa 0.32.0)**: FPC: 503 unit tests (9 for the catalog) on Windows x64 and Linux, 0 leaks; HTTP scenarios green, sample 03 with the catalog in Redis on two instances. What it showed: "Found in F3". Delphi 12 CE Win32 and Win64: 503/503, 0 leaks, HTTP scenarios green (the catalog in Redis on two instances too) |
 | F4 | pascal-db-faa | C11, only if an application needs raw rows cached | — |
 
 ## Sources
