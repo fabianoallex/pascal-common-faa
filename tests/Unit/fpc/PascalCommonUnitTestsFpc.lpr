@@ -44,6 +44,7 @@ uses
   PascalCommon.TraceContextTests,
   PascalCommon.MetricsTests,
   PascalCommon.TracingTests,
+  PascalCommon.CacheTests,
   PascalCommon.TimeZonesTests,
   PascalCommon.PasswordsTests,
   PascalCommon.StopSignalTests,

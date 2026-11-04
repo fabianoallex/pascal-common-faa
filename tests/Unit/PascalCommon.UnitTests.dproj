@@ -133,6 +133,7 @@
         <DCCReference Include="..\..\src\PascalCommon.TraceContext.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Metrics.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Tracing.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.Cache.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Passwords.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.StopSignal.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.WinHeap.pas"/>
@@ -165,6 +166,7 @@
         <DCCReference Include="PascalCommon.TraceContextTests.pas"/>
         <DCCReference Include="PascalCommon.MetricsTests.pas"/>
         <DCCReference Include="PascalCommon.TracingTests.pas"/>
+        <DCCReference Include="PascalCommon.CacheTests.pas"/>
         <DCCReference Include="PascalCommon.PasswordsTests.pas"/>
         <DCCReference Include="PascalCommon.StopSignalTests.pas"/>
         <DCCReference Include="PascalCommon.WinHeapTests.pas"/>

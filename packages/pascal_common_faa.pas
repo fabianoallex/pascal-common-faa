@@ -13,7 +13,7 @@ uses
   PascalCommon.SafeLog, PascalCommon.Utf8, PascalCommon.Text, 
   PascalCommon.Normalizers, PascalCommon.Validators, PascalCommon.TimeZones.Data, PascalCommon.TimeZones, PascalCommon.Crypto, PascalCommon.AesGcm, 
   PascalCommon.Random, PascalCommon.TraceContext, PascalCommon.Metrics, 
-  PascalCommon.Tracing, PascalCommon.Passwords, PascalCommon.StopSignal, 
+  PascalCommon.Tracing, PascalCommon.Cache, PascalCommon.Passwords, PascalCommon.StopSignal, 
   PascalCommon.WinHeap, PascalCommon.Transport, PascalCommon.Transport.Posix, 
   PascalCommon.Transport.Tcp, PascalCommon.Transport.SChannel, 
   PascalCommon.Transport.OpenSSL, PascalCommon.Transport.Tls;

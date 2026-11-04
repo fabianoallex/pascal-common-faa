@@ -1,9 +1,11 @@
 # Cache with expiry and tag invalidation — design
 
-Status: **designed, 2026-11-03; not built yet.** The user accepted every recommendation below as
-written ("tudo conforme sugerido", 2026-11-03), C12 included: F1 goes ahead before a second
-library adopts it. Nothing is measured yet; the numbers quoted come from other documents, each
-named where it is used.
+Status: **F1 done, 2026-11-04 (1.29.0)**: `PascalCommon.Cache`, green on Windows x64 and
+Linux x86_64 and i386, 0 leaks, 40 runs of its suite at `--cpus=1` with 8 containers at once;
+Delphi 12 CE Win32 and Win64 605/605, 0 leaks. Designed 2026-11-03: the user accepted every recommendation below as
+written ("tudo conforme sugerido", 2026-11-03), C12 included. What F1 settled that the design
+had left open is in "Decided in F1" below. Nothing is measured yet; the numbers quoted come
+from other documents, each named where it is used.
 
 ## Where this came from
 
@@ -123,10 +125,10 @@ generation are never read again and expire by their TTL.
 ```
 app:tag:products            -> 3
 app:tag:category:7          -> 12
-app:v:product.list:7|3|12   -> {"items":[...]}      (TTL 300 s)
+app:v:product.list:7|3,12   -> {"items":[...]}      (TTL 300 s)
 
 Invalidate(['category:7'])  -> INCR app:tag:category:7      (13)
-Key(...)                    -> app:v:product.list:7|3|13    (miss: the loader runs)
+Key(...)                    -> app:v:product.list:7|3,13    (miss: the loader runs)
 ```
 
 Why it is safe against the races the sets had: a reader that read generation 12, then loaded old
@@ -233,7 +235,8 @@ database query) already has pascal-db-faa's.
 
 ### C10 — keys (recommended)
 
-- Store key = cache name + `:v:` + application key + `|` + the generations. The application key
+- Store key = cache name + `:v:` + application key + `|` + the generations, comma-separated
+  (see "Decided in F1"). The application key
   is used as it is, so it can be read in Redis (`SCAN app:v:product.*`).
 - **No secrets in keys**: they show in `MONITOR`, `SCAN` and slow logs. A key built from a token
   or a password hash is the application's bug; hash it first (`PcSha256`) if it must depend on
@@ -254,6 +257,41 @@ adapters and the mock change) and a serialization of typed rows. Only with a con
 Options: (a) build F1 now, as was done for AES-GCM; (b) wait until pascal-api-infra-faa moves
 `TCachedTenantCatalog` onto it or an application asks. Recommendation: (a), with
 pascal-api-infra-faa's tenant catalog as the first consumer to validate the contract.
+
+## Decided in F1 (2026-11-04)
+
+- **Store key**: `<name>:v:<key>|<g1>,<g2>`, the generations separated by commas, not by `|` as
+  C4's example had. With `|` between the generations, the key `a|1` with its tag at 2 and the
+  key `a` with two tags at 1 and 2 gave the same store key. The generations never contain `|`,
+  so the last `|` separates them and the store key is unambiguous. A key without tags ends in
+  `|`.
+- **`Key` when the counters can't be read** (store down or in the pause): it returns `''`, and
+  `TryGet`, `Put`, `GetOrLoad` and `Remove` treat `''` as a key that is never stored; `GetOrLoad`
+  then runs the loader, without single-flight.
+- **A loader's exception (C5)**: the thread that ran it gets the original; each thread that
+  waited gets `EPcCacheLoadError`, with the same message and the original class name in
+  `OriginalClassName`.
+- **`OnError` and the pause (C6)** are constructor parameters, `TPcCache.Create(Store, Name,
+  OnError = nil, RetryAfterMs = 1000)`, so they never change while threads use the cache.
+  `OnError(CacheName, E)`; an exception it raises is ignored. `Invalidate` and `Remove` try the
+  store even during the pause.
+- **TTL**: `Put` with 0 or less stores nothing (and in the store, removes the key).
+- **Metrics (C9)**: `pc.cache.hits`, `pc.cache.misses`, `pc.cache.loads`,
+  `pc.cache.load_failures`, `pc.cache.store_errors`, `pc.cache.invalidations`, label `cache`
+  (Prometheus: `pc_cache_hits_total{cache="app"}`...). A read that a store failure turned into a
+  miss counts as a miss and as a store error.
+- **Memory store (C8)**: entries in insertion order in a linked list (O(1) to drop the oldest);
+  when full, it looks for expired entries at most once a second (a full scan), then drops the
+  oldest. Tag counters are a list in use order: `Generations` and `Bump` move a counter to the
+  end, and the least recently used is dropped. `Bump` takes a new value from the store's
+  sequence (not +1), which is what keeps a counter created again above any value any counter
+  had; `Bump` of a counter that doesn't exist does nothing. `AMaxTags` is a second constructor
+  parameter (0: `AMaxEntries`).
+- **`TPcCache.LoadsWaiting`**: the threads waiting now for another thread's load. Added so the
+  single-flight test releases the loader once every other thread is waiting, instead of hoping
+  after a `Sleep`; also useful as a gauge.
+- **For the Redis store (F2)**: `Bump` of a missing counter must not create it at 1 (`INCR` on a
+  missing key does); create it from the clock as C4 says, or leave it missing.
 
 ## Usage
 
@@ -331,7 +369,7 @@ FCache := TPcCache.Create(LStore, 'app');
 
 | Phase | Where | What | Done when |
 |---|---|---|---|
-| F1 | here | `PascalCommon.Cache`: contracts, `TPcCache`, `TPcMemoryCacheStore`, tests | suites green on FPC (Windows, Linux x86_64 and i386) and Delphi 12 CE Win32/Win64, 0 leaks; minor release |
+| F1 | here | `PascalCommon.Cache`: contracts, `TPcCache`, `TPcMemoryCacheStore`, tests | suites green on FPC (Windows, Linux x86_64 and i386) and Delphi 12 CE Win32/Win64, 0 leaks; minor release — **FPC done 2026-11-04 (1.29.0)**: 605/605 on Windows x64, 527/527 on Linux x86_64 and i386 (26 cache tests), 0 leaks; 40 runs of the cache suite green at `--cpus=1` with 8 containers at once. Delphi 12 CE Win32 and Win64: 605/605, 0 leaks |
 | F2 | pascal-redis-faa | `Redis.Cache` (`TRedisCacheStore`) on that release | its integration tests green against Redis, Linux and Windows |
 | F3 | pascal-api-infra-faa | `TCachedTenantCatalog` on `IPcCache`; the messaging guide's example rewritten | its suites green; first consumer of the contract |
 | F4 | pascal-db-faa | C11, only if an application needs raw rows cached | — |

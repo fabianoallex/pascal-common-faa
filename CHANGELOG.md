@@ -6,6 +6,40 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.29.0] - 2026-11-04
+
+### Added
+
+`PascalCommon.Cache`, phase F1 of `docs/cache-design.md` (decisions C1-C12): a cache with
+expiry and tag invalidation, for an application's DTOs in front of a slow query. pascal-redis-faa
+adds the Redis store (F2); pascal-api-infra-faa's `TCachedTenantCatalog` is the first consumer
+planned (F3).
+
+- `IPcCacheStore`, what a backend implements: `TryGet`, `Put` (TTL in ms), `Delete`, and tag
+  counters (`Generations`, `Bump`). Its own failures raise `EPcCacheUnavailable`.
+- `IPcCache` and `TPcCache.Create(Store, Name, OnError, RetryAfterMs)`: `Key` (the application
+  key and the generations of its tags, `<name>:v:<key>|<g1>,<g2>`), `TryGet`, `Put` (TTL in
+  seconds), `GetOrLoad` (single-flight in the process: concurrent misses of one key run the
+  loader once; a loader's exception reaches every waiting thread as `EPcCacheLoadError`),
+  `Invalidate` (moves the tags' counters: every key built with them stops being read), `Remove`.
+  An unavailable store is a miss, an ignored `Put`, an `OnError` call and a pause of
+  `RetryAfterMs` (1 s) before it is tried again; `Invalidate` and `Remove` never raise for it.
+  `LoadsWaiting` counts the threads waiting for another thread's load.
+- `TPcMemoryCacheStore.Create(MaxEntries, MaxTags)`: expiry on `TTicker`, the expired then the
+  oldest entries dropped when full, bounded tag counters that come back larger than any value
+  they had; `MaxEntries = 0` keeps nothing, not even tag counters (a cache that is off).
+- Metrics on `PcMetrics`, label `cache`: `pc.cache.hits`, `pc.cache.misses`, `pc.cache.loads`,
+  `pc.cache.load_failures`, `pc.cache.store_errors`, `pc.cache.invalidations`.
+
+### Tests
+
+- 26 tests: expiry and eviction on a manual ticker, capacity 0, counter limits, the store key's
+  shape and that two different (key, generations) pairs never meet, invalidation by either tag,
+  the metrics, single-flight with 8 threads (the loader is released only once the other 7 wait)
+  for a value and for an exception, and the failure policy on a store that fails on demand.
+  40 runs of the suite green at `--cpus=1` with 8 containers at once. Delphi 12 CE Win32 and
+  Win64: 605/605, 0 leaks.
+
 ## [1.28.0] - 2026-11-03
 
 ### Added

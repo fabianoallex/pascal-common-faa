@@ -25,6 +25,7 @@ as ARM.
 | `PascalCommon.ThreadPool` | `TPcMonitor` (lock + condition variable), `TPcThreadPool` with `TPcWorkItem`, the process-wide pool `PcPool`, and `PcProcessorCount` (the real CPU count, also on FPC for Linux) |
 | `PascalCommon.SystemContext` | Replaceable wall clock (`TClock`), monotonic clock (`TTicker`) and wait (`TSleep`), so tests can run time-dependent code without real waits |
 | `PascalCommon.ClockCache` | `TClockCache<K, V>`: a thread-safe, fixed-size cache (G-Clock eviction) with predictable latency |
+| `PascalCommon.Cache` | (1.29.0) A cache with expiry and tag invalidation for an application's DTOs: `IPcCache`/`TPcCache` (`Key` with tags, `TryGet`, `Put`, `GetOrLoad` with single-flight, `Invalidate` by tag generations), a store that is down treated as a miss, metrics on `PcMetrics`; `TPcMemoryCacheStore` in process memory. The Redis store lives in pascal-redis-faa. See `docs/cache-design.md` |
 | `PascalCommon.SafeLog` | `SafeWriteln`: a console `Writeln` safe to call from any thread, with one lock for the whole process, and a no-op in a binary without a console (service, GUI). `PcSetSafeLogUtf8(True)` makes it write UTF-8 to a file or a pipe and UTF-16 to a Windows console, the same on both compilers |
 | `PascalCommon.Utf8` | `PcTryUtf8BytesToString`: UTF-8 bytes to a string that refuses bytes that aren't UTF-8 (UTF-16 included, 1.25.0) and, on FPC, to corrupt non-ASCII text when the process code page isn't UTF-8; `PcIsValidUtf8`; `PcStringToUtf8Bytes`, the other way; `PcPercentEncode` (1.26.0): RFC 3986 percent-encoding of the UTF-8 bytes (`'João'` → `'Jo%C3%A3o'`, a space `%20`), for a query value or a path segment |
 | `PascalCommon.Text` | `PcUpperCase`, `PcLowerCase`: upper and lower case that map every Unicode letter on both compilers, whatever the process locale (`AnsiUpperCase` on FPC/Linux depends on it; gotcha 10). `PcCharCount` (1.21.0): characters as code points, the same on both compilers. `PcFoldForSearch` (1.20.0): a search key, lower case with Latin accents removed and blanks collapsed (`'São  CONCEIÇÃO'` → `'sao conceicao'`), to store next to a name and compare with what the user types, the same on every database |
@@ -251,6 +252,40 @@ by the gap, to 03:30; one that happens twice (01:30 when the clock goes back) ta
 Pass `gapStartOfAfter`, `gapRaise`, `overlapLater` or `overlapRaise` to `ToUtc` for another rule,
 or call `Map` to see every answer. Design, measurements and the update policy for the embedded
 data: [`docs/timezones-design.md`](docs/timezones-design.md).
+
+### A cache in front of a slow query
+
+```pascal
+uses PascalCommon.Cache;
+
+// Composition root: one cache for the process.
+FCache := TPcCache.Create(TPcMemoryCacheStore.Create(10000), 'app');
+
+function TProductService.ListByCategory(ACategoryId: Integer): TProductList;
+var
+  LKey, LJson: string;
+begin
+  LKey := FCache.Key('product.list:' + IntToStr(ACategoryId),
+    ['products', 'category:' + IntToStr(ACategoryId)]);
+  if FCache.TryGet(LKey, LJson) then
+    Exit(JsonToProducts(LJson));                       // hit: no database
+  Result := FRepository.ListByCategory(ACategoryId);
+  FCache.Put(LKey, ProductsToJson(Result), 300);       // 5 minutes
+end;
+
+procedure TProductService.UpdatePrice(AProductId, ACategoryId: Integer; APrice: Currency);
+begin
+  FRepository.UpdatePrice(AProductId, APrice);         // commits inside
+  FCache.Invalidate(['category:' + IntToStr(ACategoryId)]);  // after the commit
+end;
+```
+
+`GetOrLoad(Key, Ttl, Loader, Arg)` does the same with a method as the loader, and runs it once
+when many threads miss the same key together. Invalidate after the commit, never before, and
+don't cache what a transaction that also wrote has read: it may be rolled back. A store that is
+down (Redis, through pascal-redis-faa's store) is a miss, not an error; the TTL bounds how long
+a value can be stale when an invalidation fails. Values are strings (your DTO's JSON), and keys
+show in Redis tools: no secrets in them.
 
 ### Stopping a server cleanly
 
