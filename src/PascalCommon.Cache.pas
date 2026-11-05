@@ -27,10 +27,14 @@ unit PascalCommon.Cache;
     same tags: "product.list:7" built once with [category:7] and once with
     [products] could meet under the same generation numbers.
   - GetOrLoad runs the loader once per key among the threads of this process
-    that miss it at the same time (single-flight, C5). If the loader raises,
+    that miss it at the same time (single-flight, C5), on
+    PascalCommon.SingleFlight since 1.30.0 (docs/single-flight-design.md,
+    S8). The Put happens inside the flight. If the loader raises,
     the thread that ran it gets the exception; each thread that waited gets
     an EPcCacheLoadError with the same message (one exception object can't
-    be raised in several threads). Nothing is stored. A thread that misses
+    be raised in several threads). Nothing is stored. A loader that calls
+    GetOrLoad for its own key raises EPcSingleFlightError (it hung before
+    1.30.0). A thread that misses
     just after a load ended may load again: no second read of the store to
     avoid it, which would cost a round trip on every miss.
   - The store is optional (C6). EPcCacheUnavailable from it (unreachable,
@@ -76,7 +80,8 @@ uses
   SysUtils,
   SyncObjs,
   Generics.Collections,
-  PascalCommon.Metrics;
+  PascalCommon.Metrics,
+  PascalCommon.SingleFlight;
 
 type
   /// Base of this unit's exceptions; also raised when a store breaks the
@@ -155,9 +160,7 @@ type
     FOnError: TPcCacheErrorProc;
     FRetryAfterMs: Cardinal;
     FPausedUntilMs: UInt64;
-    FWaiting: Integer;
-    FLoadLock: TCriticalSection;
-    FLoading: TDictionary<string, TObject>;
+    FFlights: TPcSingleFlight<string>;
     FHits: TPcCounterSeries;
     FMisses: TPcCounterSeries;
     FLoads: TPcCounterSeries;
@@ -168,10 +171,6 @@ type
     procedure StoreFailed(AError: Exception);
     function TagKeys(const ATags: array of string): TArray<string>;
     function Load(const ALoader: TPcCacheLoadFunc; const AArg: string): string;
-    function Lead(const AStoreKey: string; ATtlSeconds: Integer;
-      const ALoader: TPcCacheLoadFunc; const AArg: string; AFlight: TObject): string;
-    procedure EndFlight(const AStoreKey: string; AFlight: TObject);
-    procedure ReleaseFlight(AFlight: TObject);
   public
     /// AName: 1 to 64 characters of [A-Za-z0-9_.-]; prefixes the keys (two
     /// caches can share one Redis) and labels the metrics. AOnError: told of
@@ -259,37 +258,58 @@ uses
   PascalCommon.SystemContext;
 
 const
-  WAIT_FOREVER = Cardinal($FFFFFFFF);
   /// The memory store looks for expired entries, when full, at most this
   /// often.
   SWEEP_INTERVAL_MS = 1000;
 
 type
-  /// A load in progress (GetOrLoad). Refs and the dictionary entry are
-  /// guarded by TPcCache.FLoadLock; the result fields are written by the
-  /// loading thread before Done is set and read by the others after.
-  TPcCacheFlight = class
-  public
-    Done: TEvent;
-    Refs: Integer;
-    Value: string;
-    Failed: Boolean;
-    ErrorClassName: string;
-    ErrorMessage: string;
-    constructor Create;
-    destructor Destroy; override;
+  /// TPcCache's flights: a waiter gets EPcCacheLoadError, as before 1.30.0.
+  TPcCacheFlights = class(TPcSingleFlight<string>)
+  protected
+    function WaiterException(AClass: ExceptClass;
+      const AClassName, AMessage: string): Exception; override;
   end;
 
-constructor TPcCacheFlight.Create;
+  /// One GetOrLoad miss: the method the flight runs in the leading thread
+  /// (FPC 3.2.2 has no closures). It loads and stores inside the flight, so
+  /// a thread that misses after the flight ended finds the value. A store
+  /// bug in Put is kept and raised in the leading thread after the flight,
+  /// so the waiters still get the value (as before 1.30.0).
+  TPcCacheLoadCall = class
+  public
+    Cache: TPcCache;
+    StoreKey: string;
+    TtlSeconds: Integer;
+    Loader: TPcCacheLoadFunc;
+    PutError: TObject;
+    destructor Destroy; override;
+    function Run(const AArg: string): string;
+  end;
+
+function TPcCacheFlights.WaiterException(AClass: ExceptClass;
+  const AClassName, AMessage: string): Exception;
 begin
-  inherited Create;
-  Done := TEvent.Create(nil, True, False, '');
+  if AClass = nil then
+    Result := EPcCacheLoadError.Create('TObject',
+      'The cache loader raised an object that is not an Exception')
+  else
+    Result := EPcCacheLoadError.Create(AClassName, AMessage);
 end;
 
-destructor TPcCacheFlight.Destroy;
+destructor TPcCacheLoadCall.Destroy;
 begin
-  Done.Free;
+  PutError.Free;
   inherited Destroy;
+end;
+
+function TPcCacheLoadCall.Run(const AArg: string): string;
+begin
+  Result := Cache.Load(Loader, AArg);
+  try
+    Cache.Put(StoreKey, Result, TtlSeconds);
+  except
+    PutError := TObject(AcquireExceptionObject);
+  end;
 end;
 
 { EPcCacheLoadError }
@@ -332,8 +352,7 @@ begin
   FTagPrefix := AName + ':tag:';
   FOnError := AOnError;
   FRetryAfterMs := ARetryAfterMs;
-  FLoadLock := TCriticalSection.Create;
-  FLoading := TDictionary<string, TObject>.Create;
+  FFlights := TPcCacheFlights.Create;
   FHits := Series('pc.cache.hits', '{hit}', 'Cache reads that found a value');
   FMisses := Series('pc.cache.misses', '{miss}',
     'Cache reads that found nothing, store failures included');
@@ -347,8 +366,7 @@ end;
 
 destructor TPcCache.Destroy;
 begin
-  FLoading.Free;
-  FLoadLock.Free;
+  FFlights.Free;
   inherited Destroy;
 end;
 
@@ -461,111 +479,31 @@ begin
   end;
 end;
 
-procedure TPcCache.EndFlight(const AStoreKey: string; AFlight: TObject);
-begin
-  FLoadLock.Enter;
-  try
-    FLoading.Remove(AStoreKey);
-  finally
-    FLoadLock.Leave;
-  end;
-  TPcCacheFlight(AFlight).Done.SetEvent;
-end;
-
-procedure TPcCache.ReleaseFlight(AFlight: TObject);
-var
-  LFree: Boolean;
-begin
-  FLoadLock.Enter;
-  try
-    Dec(TPcCacheFlight(AFlight).Refs);
-    LFree := TPcCacheFlight(AFlight).Refs = 0;
-  finally
-    FLoadLock.Leave;
-  end;
-  if LFree then
-    AFlight.Free;
-end;
-
-function TPcCache.Lead(const AStoreKey: string; ATtlSeconds: Integer;
-  const ALoader: TPcCacheLoadFunc; const AArg: string; AFlight: TObject): string;
-var
-  LFlight: TPcCacheFlight;
-begin
-  LFlight := TPcCacheFlight(AFlight);
-  try
-    Result := Load(ALoader, AArg);
-  except
-    on E: Exception do
-    begin
-      LFlight.Failed := True;
-      LFlight.ErrorClassName := E.ClassName;
-      LFlight.ErrorMessage := E.Message;
-      EndFlight(AStoreKey, LFlight);
-      raise;
-    end
-    else
-    begin
-      // Something raised that isn't an Exception: the waiters must still wake.
-      LFlight.Failed := True;
-      LFlight.ErrorClassName := 'TObject';
-      LFlight.ErrorMessage := 'The cache loader raised an object that is not an Exception';
-      EndFlight(AStoreKey, LFlight);
-      raise;
-    end;
-  end;
-  // Stored before the flight ends, so a thread that misses after it ended
-  // finds the value instead of loading again.
-  try
-    LFlight.Value := Result;
-    Put(AStoreKey, Result, ATtlSeconds);
-  finally
-    EndFlight(AStoreKey, LFlight);
-  end;
-end;
-
 function TPcCache.GetOrLoad(const AStoreKey: string; ATtlSeconds: Integer;
   const ALoader: TPcCacheLoadFunc; const AArg: string): string;
 var
-  LObject: TObject;
-  LFlight: TPcCacheFlight;
-  LLeader: Boolean;
+  LCall: TPcCacheLoadCall;
+  LError: TObject;
 begin
   if TryGet(AStoreKey, Result) then
     Exit;
   if AStoreKey = '' then
     Exit(Load(ALoader, AArg));
-  FLoadLock.Enter;
+  LCall := TPcCacheLoadCall.Create;
   try
-    LLeader := not FLoading.TryGetValue(AStoreKey, LObject);
-    if LLeader then
+    LCall.Cache := Self;
+    LCall.StoreKey := AStoreKey;
+    LCall.TtlSeconds := ATtlSeconds;
+    LCall.Loader := ALoader;
+    Result := FFlights.Run(AStoreKey, LCall.Run, AArg);
+    if LCall.PutError <> nil then
     begin
-      LFlight := TPcCacheFlight.Create;
-      FLoading.Add(AStoreKey, LFlight);
-    end
-    else
-      LFlight := TPcCacheFlight(LObject);
-    Inc(LFlight.Refs);
-  finally
-    FLoadLock.Leave;
-  end;
-  try
-    if LLeader then
-      Result := Lead(AStoreKey, ATtlSeconds, ALoader, AArg, LFlight)
-    else
-    begin
-      PcAtomicInc(FWaiting);
-      try
-        LFlight.Done.WaitFor(WAIT_FOREVER);
-      finally
-        PcAtomicDec(FWaiting);
-      end;
-      if LFlight.Failed then
-        raise EPcCacheLoadError.Create(LFlight.ErrorClassName, LFlight.ErrorMessage);
-      Result := LFlight.Value;
+      LError := LCall.PutError;
+      LCall.PutError := nil;
+      raise LError;
     end;
   finally
-    ReleaseFlight(LFlight);
+    LCall.Free;
   end;
 end;
 
@@ -596,7 +534,7 @@ end;
 
 function TPcCache.LoadsWaiting: Integer;
 begin
-  Result := PcAtomicGet(FWaiting);
+  Result := FFlights.Waiting;
 end;
 
 { TPcCacheNodeList }

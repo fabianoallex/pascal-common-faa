@@ -26,6 +26,7 @@ as ARM.
 | `PascalCommon.SystemContext` | Replaceable wall clock (`TClock`), monotonic clock (`TTicker`) and wait (`TSleep`), so tests can run time-dependent code without real waits |
 | `PascalCommon.ClockCache` | `TClockCache<K, V>`: a thread-safe, fixed-size cache (G-Clock eviction) with predictable latency |
 | `PascalCommon.Cache` | (1.29.0) A cache with expiry and tag invalidation for an application's DTOs: `IPcCache`/`TPcCache` (`Key` with tags, `TryGet`, `Put`, `GetOrLoad` with single-flight, `Invalidate` by tag generations), a store that is down treated as a miss, metrics on `PcMetrics`; `TPcMemoryCacheStore` in process memory. The Redis store lives in pascal-redis-faa. See `docs/cache-design.md` |
+| `PascalCommon.SingleFlight` | (1.30.0) `TPcSingleFlight<T>.Run(Key, Loader, Arg)`: the threads that ask for one key at the same time share one run of the loader (a token renewal, a tenant's first load, a reconnect); its exception reaches them all; nothing is kept after it. `TPcCache.GetOrLoad` runs on it. See `docs/single-flight-design.md` |
 | `PascalCommon.SafeLog` | `SafeWriteln`: a console `Writeln` safe to call from any thread, with one lock for the whole process, and a no-op in a binary without a console (service, GUI). `PcSetSafeLogUtf8(True)` makes it write UTF-8 to a file or a pipe and UTF-16 to a Windows console, the same on both compilers |
 | `PascalCommon.Utf8` | `PcTryUtf8BytesToString`: UTF-8 bytes to a string that refuses bytes that aren't UTF-8 (UTF-16 included, 1.25.0) and, on FPC, to corrupt non-ASCII text when the process code page isn't UTF-8; `PcIsValidUtf8`; `PcStringToUtf8Bytes`, the other way; `PcPercentEncode` (1.26.0): RFC 3986 percent-encoding of the UTF-8 bytes (`'João'` → `'Jo%C3%A3o'`, a space `%20`), for a query value or a path segment |
 | `PascalCommon.Text` | `PcUpperCase`, `PcLowerCase`: upper and lower case that map every Unicode letter on both compilers, whatever the process locale (`AnsiUpperCase` on FPC/Linux depends on it; gotcha 10). `PcCharCount` (1.21.0): characters as code points, the same on both compilers. `PcFoldForSearch` (1.20.0): a search key, lower case with Latin accents removed and blanks collapsed (`'São  CONCEIÇÃO'` → `'sao conceicao'`), to store next to a name and compare with what the user types, the same on every database |
@@ -286,6 +287,36 @@ don't cache what a transaction that also wrote has read: it may be rolled back. 
 down (Redis, through pascal-redis-faa's store) is a miss, not an error; the TTL bounds how long
 a value can be stale when an invalidation fails. Values are strings (your DTO's JSON), and keys
 show in Redis tools: no secrets in them.
+
+### One run of a slow call for every thread that asks at once
+
+```pascal
+uses PascalCommon.SingleFlight;
+
+// A field of the client, created with it: FRenew := TPcSingleFlight<string>.Create;
+function TApiClient.RenewToken(const AArg: string): string;   // the loader: a method
+begin
+  if not TokenExpired then          // a flight that just ended may have renewed it
+    Exit(CurrentToken);
+  Result := FetchNewToken;          // its own HTTP timeout bounds everybody's wait
+  StoreToken(Result);
+end;
+
+function TApiClient.Token: string;
+begin
+  if not TokenExpired then
+    Exit(CurrentToken);
+  Result := FRenew.Run('token', RenewToken, '');
+end;
+```
+
+The first thread runs the loader; the others that ask for `'token'` while it runs wait and get
+its result. If it raises, each of them gets an exception of the same class and message
+(`EPcSingleFlightError` when the class can't be built again, such as `EOutOfMemory`). It is not
+a cache: the next call after the flight runs the loader again, so check first, as above. Only
+the first caller's loader and argument run, so one key must mean one piece of work. `T` is a
+value, a string, a record or an interface, never a class. One process only; across instances,
+pascal-redis-faa's `TRedisLock`. Design: [`docs/single-flight-design.md`](docs/single-flight-design.md).
 
 ### Stopping a server cleanly
 

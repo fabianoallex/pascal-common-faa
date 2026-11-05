@@ -6,6 +6,48 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.30.0] - 2026-11-05
+
+### Added
+
+`PascalCommon.SingleFlight` (`docs/single-flight-design.md`, decisions S1-S10): the
+single-flight that was private to `TPcCache`, for any slow call that several threads may ask for
+at once (renewing a token, loading a tenant's catalog, a rate-limited API, reconnecting).
+
+- `TPcSingleFlight<T>.Run(Key, Loader, Arg): T`: the first thread runs `Loader(Arg)`, the
+  threads that ask for the same key while it runs wait and get its result. Nothing is kept after
+  the flight. The loader follows `PASCALCOMMON_FUNCREFS` (a method on FPC 3.2.2, a closure or a
+  method on Delphi). `Waiting` counts the threads waiting now.
+- A loader's exception: the thread that ran it gets the original; each waiting thread gets a new
+  exception of the same class with the same message and `HelpContext` (built with
+  `Exception.Create`: a subclass's own fields stay empty), or `EPcSingleFlightError` (the class
+  name in `OriginalClassName`) when it can't be built that way (not an `Exception`, a heap
+  exception, a `Create` that raises). The protected virtual `WaiterException` decides; a subclass
+  can override it.
+- A class as `T` raises `EArgumentException` in the constructor. A loader that calls `Run` for its
+  own key in its own thread raises `EPcSingleFlightError` instead of waiting for itself.
+
+### Changed
+
+- `TPcCache.GetOrLoad` runs on `PascalCommon.SingleFlight`. Its API, metrics and exceptions are
+  the same (waiters still get `EPcCacheLoadError`; a store bug in `Put` still reaches the loading
+  thread while the waiters get the value), with one difference: a loader that calls `GetOrLoad`
+  for its own key now raises `EPcSingleFlightError` where it used to hang. `PascalCommon.Cache`
+  now uses `PascalCommon.SingleFlight` in its interface.
+
+### Tests
+
+- 12 single-flight tests: 8 threads on one key (the loader released only once the other 7
+  wait), two keys loading at the same time, the exception's class, message and `HelpContext` in
+  every thread, a non-`Exception`, the heap exceptions and an unbuildable class wrapped, a new
+  flight after one ended (value or exception), `Integer`/record/interface as `T`, a class
+  refused, a re-entrant call, an overridden `WaiterException`, and two `TPcCache` cases its suite
+  didn't cover (a store bug in `Put`, a loader raising a non-`Exception`). The 26 cache tests
+  unchanged.
+- FPC 3.2.2: 617/617 on Windows x64, 539/539 on Linux x86_64 and i386, 0 leaks; the
+  single-flight and cache suites 40 runs each green at `--cpus=1` with 8 containers at once.
+  Delphi 12 CE Win32 and Win64: 617/617, 0 leaks.
+
 ## [1.29.0] - 2026-11-04
 
 ### Added

@@ -319,3 +319,36 @@ right now, and `EAGAIN` goes back to the poll and its deadline. The socket stays
 mode for anyone using the fd directly. The test now writes on its own thread and waits for it
 with a deadline, so a regression ends as a failure, not a hang. pascal-pipes-faa gets the fix by
 moving to this unit (step 2 of `docs/transport-design.md`).
+
+## 16. A generic's method can't call what the unit declares only in its implementation section
+
+**Symptom.** FPC 3.2.2 (`{$MODE DELPHI}`): `Error: Global Generic template references static
+symtable` on a generic class's method that calls a routine (or uses a constant or a type)
+declared only in the `implementation` section, as soon as another unit specializes the generic.
+Delphi refuses the same with E2506 ("Method of parameterized type declared in interface section
+must not use local symbol"). Measured 2026-11-05 while designing `PascalCommon.SingleFlight`
+(`docs/single-flight-design.md`, "Measured").
+
+**Cause.** A generic's body is compiled where it is specialized, in the other unit, which can't
+see this unit's implementation symbols. A unit in the `implementation` `uses` clause is fine
+(measured on FPC).
+
+**Fix.** Keep the generic thin. Put the code that doesn't depend on `T` in a non-generic base
+class (its methods can use anything in the unit) and have the generic call the base's
+protected methods, as `TPcSingleFlightBase` does; or declare the helper in the interface
+section or as a private method of the class.
+
+## 17. Recreating `EOutOfMemory` or `EInvalidPointer` with `Create` leaks it
+
+**Symptom.** `ExceptClass(E.ClassType).Create(E.Message)` followed by `Free` (or a raise and the
+handler freeing it) leaves one block for `EOutOfMemory` and one for `EInvalidPointer`: heaptrc on
+FPC 3.2.2 (Windows, Linux x86_64 and i386), `ReportMemoryLeaksOnShutdown` on Delphi 12. Measured
+2026-11-05, for the waiters' exception of `PascalCommon.SingleFlight`.
+
+**Cause.** They descend from `EHeapMemoryError` (FPC) / `EHeapException` (Delphi), whose
+`FreeInstance` frees only the instances the RTL marks as freeable (it raises a preallocated one
+when memory runs out); one built with `Create` is never marked.
+
+**Fix.** Don't build them again: `PascalCommon.SingleFlight` gives a waiter
+`EPcSingleFlightError` (with `OriginalClassName`) for any heap exception. Any code that clones an
+exception by its class must skip these two.

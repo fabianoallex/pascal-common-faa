@@ -174,6 +174,10 @@ needs it.
 - "Not found" is the application's to encode (an empty JSON array, `null`): no negative caching
   in the cache itself, which would need a sentinel the values could collide with.
 
+Since 1.30.0 the single-flight is its own unit, `PascalCommon.SingleFlight`
+([`single-flight-design.md`](single-flight-design.md)), and `GetOrLoad` runs on it with the same
+behavior, except that a loader asking for its own key raises instead of hanging (S7 there).
+
 ### C6 — the store is optional: its failures are misses (recommended)
 
 A cache that is down must not take the application down. In `TPcCache`:
