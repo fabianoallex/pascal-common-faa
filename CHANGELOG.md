@@ -6,6 +6,24 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.31.1] - 2026-11-10
+
+### Changed
+
+- `PascalCommon.TimeZones.Data`: the IANA tzdb **2026f** (was 2026e), 344 zones and 253 links,
+  rebuilt with `tools/gen_tzdata.py` with its golden file. Cuba (`America/Havana`, `Cuba`)
+  doesn't fall back to -05 on 2026-11-01 and stays on -04 through 2027-11-07; 1965/1966 data
+  for Brazil (before 1970, outside the golden file's transitions). Tarball SHA-512
+  `26189803c8b3e903...e532f6acab52d`; its signature still isn't checked
+  (`docs/timezones-design.md`).
+
+### CI
+
+- `ubuntu-latest` moved to Ubuntu 26.04, where Docker's default seccomp profile gives socket
+  calls from 32-bit code ENOSYS (new gotcha 19). `tools/ci-test.sh` builds the i386 image and
+  runs the i386 suite with `seccomp=unconfined` (`FPC_DOCKER_OPTS` in
+  `tools/test_fpc_docker.sh`), and prints the whole log when an image fails to build.
+
 ## [1.31.0] - 2026-11-10
 
 Tagged after pascal-api-infra-faa ran on it (`docs/http-design.md`, H11): its 0.33.0 makes its
