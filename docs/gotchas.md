@@ -369,3 +369,23 @@ for itself, so another program's setting no longer hides this.
 `TPcEndpoint.HasPendingInput` (1.31.0) does `recv` with `MSG_PEEK` on the non-blocking socket. A
 short deadline is still right for "give up after this long", where 15 ms of slack doesn't
 matter.
+
+## 19. Docker 29.4: 32-bit code in a container gets ENOSYS from socket calls
+
+**Symptom.** On GitHub's ubuntu-26.04 runners (Docker 29.4.2, kernel 7.0; measured 2026-11-10)
+an `i386/debian:bookworm` container can't resolve any name: `apt-get update` warns
+`Temporary failure resolving 'deb.debian.org'` and `apt-get install fpc` stops with
+`Unable to locate package fpc`, exit code 100 (`getent hosts` returns 2). With the image built,
+an FPC i386 program's TCP listen fails with `error 38: Function not implemented`
+(`PascalCommon.Transport.Posix`). The x86_64 containers on the same runner are fine, and so
+was i386 on ubuntu-24.04.
+
+**Cause.** Docker's default seccomp profile on that host makes socket calls made by 32-bit code
+fail with ENOSYS: both glibc's resolver and FPC's RTL are hit. `--dns 8.8.8.8` and
+`--network=host` don't change it; `--security-opt seccomp=unconfined` does. Not something in
+this library: an FPC i386 application under that Docker breaks the same way.
+
+**Fix.** Run i386 containers with `--security-opt seccomp=unconfined`. `docker build` has no
+seccomp option, so `tools/ci-test.sh` makes the i386 image with `docker run` + `docker commit`
+and passes the option to the test run through `FPC_DOCKER_OPTS` (`tools/test_fpc_docker.sh`).
+For an application in production, prefer a 64-bit build over turning seccomp off.
