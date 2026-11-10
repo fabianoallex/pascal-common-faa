@@ -53,6 +53,8 @@ uses
   PascalCommon.TransportTests,
   PascalCommon.TcpTransportTests,
   PascalCommon.TlsTransportTests,
+  PascalCommon.HttpTests,
+  PascalCommon.HttpClientTests,
   PascalCommon.JsonMapperOptionalsTests;
 
 var

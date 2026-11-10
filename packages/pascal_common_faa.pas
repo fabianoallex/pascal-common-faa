@@ -18,7 +18,8 @@ uses
   PascalCommon.Cache, PascalCommon.Passwords, PascalCommon.StopSignal, 
   PascalCommon.WinHeap, PascalCommon.Transport, PascalCommon.Transport.Posix, 
   PascalCommon.Transport.Tcp, PascalCommon.Transport.SChannel, 
-  PascalCommon.Transport.OpenSSL, PascalCommon.Transport.Tls;
+  PascalCommon.Transport.OpenSSL, PascalCommon.Transport.Tls, PascalCommon.Http, 
+  PascalCommon.Http.Client, PascalCommon.Http.Fake;
 
 implementation
 

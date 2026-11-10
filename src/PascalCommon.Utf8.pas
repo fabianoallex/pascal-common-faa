@@ -38,12 +38,23 @@ unit PascalCommon.Utf8;
   S%C3%A3o, the same on both compilers. For a query value or a path
   segment. It came from pascal-agenda-faa (ApiQueryEscape, its desktop
   client's query strings; "M7: design", decision 4), the same byte for byte
-  as pascal-api-infra-faa's private McpUrlEncode, which is to call it. }
+  as pascal-api-infra-faa's private McpUrlEncode, which is to call it.
+
+  EPcTextEncoding and PcUtf8BytesToString (1.31.0) are the raising form, for
+  a caller with no exception of its own: pascal-api-infra-faa's
+  PaUtf8BytesToString and ETextEncodingException, moved here with the HTTP
+  transport (docs/http-design.md, H7), whose answers raise it for a body
+  that isn't UTF-8. The infra declares its class as an alias of this one, so
+  its existing handlers still catch it. }
 
 interface
 
 uses
   SysUtils;
+
+type
+  /// Text that isn't UTF-8, or that FPC's code page can't hold (1.31.0).
+  EPcTextEncoding = class(Exception);
 
 /// The text in ABytes (UTF-8, with or without a BOM) in AText. False, with
 /// AText empty, when ABytes isn't valid UTF-8 (PcIsValidUtf8; a UTF-16 file
@@ -52,6 +63,13 @@ uses
 /// conversion would replace characters with "?"). Never raises. Empty input
 /// gives True and ''.
 function PcTryUtf8BytesToString(const ABytes: TBytes; out AText: string): Boolean;
+
+/// PcTryUtf8BytesToString that raises (1.31.0). AOrigin names where the
+/// bytes came from, for the message ('the answer to GET https://h/p').
+/// EPcTextEncoding when the bytes aren't UTF-8 (a UTF-16 byte order mark is
+/// named), and on FPC when they are non-ASCII and the process code page isn't
+/// UTF-8.
+function PcUtf8BytesToString(const ABytes: TBytes; const AOrigin: string): string;
 
 /// True when ABytes, after an optional UTF-8 BOM, is well-formed UTF-8
 /// (1.25.0): RFC 3629 / Unicode table 3-7, so no stray continuation byte, no
@@ -173,6 +191,24 @@ begin
     end;
   end;
   {$ENDIF}
+end;
+
+function PcUtf8BytesToString(const ABytes: TBytes; const AOrigin: string): string;
+begin
+  if PcTryUtf8BytesToString(ABytes, Result) then
+    Exit;
+  if (Length(ABytes) >= 2) and (((ABytes[0] = $FF) and (ABytes[1] = $FE)) or
+    ((ABytes[0] = $FE) and (ABytes[1] = $FF))) then
+    raise EPcTextEncoding.CreateFmt(
+      '%s is not UTF-8 (it starts with a UTF-16 byte order mark): save it as UTF-8', [AOrigin]);
+  if not PcIsValidUtf8(ABytes) then
+    raise EPcTextEncoding.CreateFmt(
+      '%s is not UTF-8 (it has bytes that are not valid UTF-8): save it as UTF-8', [AOrigin]);
+  raise EPcTextEncoding.CreateFmt(
+    '%s contains non-ASCII characters, but the process default code page is %d, ' +
+    'not UTF-8 (65001): FPC would silently turn characters outside that code page into "?". ' +
+    'Call SetMultiByteConversionCodePage(CP_UTF8) at startup (LCL applications already run in UTF-8).',
+    [AOrigin, DefaultSystemCodePage]);
 end;
 
 function PcStringToUtf8Bytes(const AText: string): TBytes;

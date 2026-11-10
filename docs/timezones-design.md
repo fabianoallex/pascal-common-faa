@@ -34,6 +34,11 @@ pascal-agenda-faa's. The measurements below were taken on 2026-10-20 on this mac
   data file, `tests/Unit/golden/tzdata-golden.txt`, read once per run and found by walking up
   from the executable's folder. An application is not affected by the change; one already near
   that point in CE gets 8 900 more lines from the data unit.
+- **It came back in 1.31.0** (the HTTP units: the unit test project went from 44 450 lines to
+  50 936). On Delphi the time zone tests are now a project of their own,
+  `tests/Unit/PascalCommon.TimeZonesSuite.dproj` (the data unit, the zone unit and their tests,
+  about 12 000 lines); the unit test project is back to 38 761. FPC still runs them in its one
+  runner.
 
 ## Why
 

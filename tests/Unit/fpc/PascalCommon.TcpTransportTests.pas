@@ -82,6 +82,7 @@ type
     procedure Connect_UnresolvableName_Raises;
     procedure Listen_PortInUse_Raises;
     procedure NoDelay_SmallWritesDontWaitForAcks;
+    procedure HasPendingInput_BytesAndClose_WithoutWaiting;
   end;
 
 implementation
@@ -937,6 +938,47 @@ begin
   LByte := 0;
   TAssert.AssertEquals(1, FServerEp.Read(LByte, 1));
   TAssert.AssertEquals(7, Integer(LByte));
+end;
+
+// Polls until AEndpoint has input pending, or CWaitMs passes.
+function WaitPending(AEndpoint: TPcEndpoint): Boolean;
+var
+  LDeadline: UInt64;
+begin
+  LDeadline := PcTickMs + CWaitMs;
+  repeat
+    if AEndpoint.HasPendingInput then
+      Exit(True);
+    Sleep(1);
+  until PcTickMs >= LDeadline;
+  Result := False;
+end;
+
+procedure TTcpTransportTests.HasPendingInput_BytesAndClose_WithoutWaiting;
+var
+  LByte: Byte;
+  T0: UInt64;
+  I: Integer;
+begin
+  OpenLoopback('127.0.0.1');
+  // It never waits: 100 checks take well under one timer tick each (a 1 ms
+  // wait costs 15.5 ms on Windows).
+  T0 := PcTickMs;
+  for I := 1 to 100 do
+    TAssert.AssertFalse('nothing sent yet', FClientEp.HasPendingInput);
+  TAssert.AssertTrue(Format('100 checks took %d ms', [PcTickMs - T0]), PcTickMs - T0 < 200);
+  LByte := 7;
+  FServerEp.WriteExactly(LByte, 1);
+  TAssert.AssertTrue('the byte', WaitPending(FClientEp));
+  TAssert.AssertTrue('a peek leaves it there', FClientEp.HasPendingInput);
+  LByte := 0;
+  TAssert.AssertEquals(1, FClientEp.Read(LByte, 1));
+  TAssert.AssertEquals(7, LByte);
+  TAssert.AssertFalse('read', FClientEp.HasPendingInput);
+  FServerEp.CloseAbort; // the FIN
+  TAssert.AssertTrue('the peer''s close', WaitPending(FClientEp));
+  FClientEp.CloseAbort;
+  TAssert.AssertTrue('after CloseAbort', FClientEp.HasPendingInput);
 end;
 
 procedure TTcpTransportTests.Connect_ClosedPort_RaisesWithinTheBudget;

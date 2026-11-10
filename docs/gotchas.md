@@ -352,3 +352,20 @@ when memory runs out); one built with `Create` is never marked.
 **Fix.** Don't build them again: `PascalCommon.SingleFlight` gives a waiter
 `EPcSingleFlightError` (with `OriginalClassName`) for any heap exception. Any code that clones an
 exception by its class must skip these two.
+
+## 18. Windows: a 1 ms wait takes 15.5 ms
+
+**Symptom.** `WaitForSingleObject(Event, 1)` in a loop of 100: 15.5 ms per wait, on Windows 11
+with FPC 3.2.2 (measured 2026-11-10, `.ci/probe-http/wait`). `WSAWaitForMultipleEvents`, which
+`TPcEndpoint`'s deadlines use on Windows, waits the same way. Found while designing the HTTP
+client's check before reusing a pooled connection (`docs/http-design.md`, H5), which was to be a
+read with a 1 ms deadline.
+
+**Cause.** A wait with a timeout ends on a tick of the system timer, about 15.6 ms by default.
+Since Windows 10 2004 a program that raises the resolution (`timeBeginPeriod`) changes it only
+for itself, so another program's setting no longer hides this.
+
+**Fix.** Don't wait to learn "is anything there?": peek without waiting.
+`TPcEndpoint.HasPendingInput` (1.31.0) does `recv` with `MSG_PEEK` on the non-blocking socket. A
+short deadline is still right for "give up after this long", where 15 ms of slack doesn't
+matter.

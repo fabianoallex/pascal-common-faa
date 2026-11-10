@@ -121,8 +121,6 @@
         <DCCReference Include="..\..\src\PascalCommon.Text.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Normalizers.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Validators.pas"/>
-        <DCCReference Include="..\..\src\PascalCommon.TimeZones.Data.pas"/>
-        <DCCReference Include="..\..\src\PascalCommon.TimeZones.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Optionals.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.ThreadPool.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.SafeLog.pas"/>
@@ -143,6 +141,9 @@
         <DCCReference Include="..\..\src\PascalCommon.Transport.SChannel.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Transport.OpenSSL.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Transport.Tls.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.Http.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.Http.Client.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.Http.Fake.pas"/>
         <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas"/>
         <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas"/>
         <DCCReference Include="..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas"/>
@@ -155,7 +156,6 @@
         <DCCReference Include="PascalCommon.OptionalsMapTests.pas"/>
         <DCCReference Include="PascalCommon.NormalizersTests.pas"/>
         <DCCReference Include="PascalCommon.ValidatorsTests.pas"/>
-        <DCCReference Include="PascalCommon.TimeZonesTests.pas"/>
         <DCCReference Include="PascalCommon.OptionalsNormalizersTests.pas"/>
         <DCCReference Include="PascalCommon.TextTests.pas"/>
         <DCCReference Include="PascalCommon.ThreadPoolTests.pas"/>
@@ -175,6 +175,8 @@
         <DCCReference Include="PascalCommon.TransportTests.pas"/>
         <DCCReference Include="PascalCommon.TcpTransportTests.pas"/>
         <DCCReference Include="PascalCommon.TlsTransportTests.pas"/>
+        <DCCReference Include="PascalCommon.HttpTests.pas"/>
+        <DCCReference Include="PascalCommon.HttpClientTests.pas"/>
         <DCCReference Include="PascalCommon.JsonMapperOptionalsTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

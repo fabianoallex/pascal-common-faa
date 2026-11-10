@@ -6,6 +6,85 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.31.0] - not tagged yet
+
+The tag waits for pascal-api-infra-faa to run on it (`docs/http-design.md`, H11): a mistake in
+the interface found in that migration is then still free to fix.
+
+### Added
+
+The HTTP client transport (`docs/http-design.md`, decisions H1-H11), promoted from
+pascal-api-infra-faa's `PascalApi.HttpTransport` for pascal-search-faa's Meilisearch and
+Typesense adapters, with verified TLS on both compilers.
+
+- `PascalCommon.Http`: the contract. `IPcHttpTransport.Send(TPcHttpRequest): TPcHttpResponse`,
+  `TPcHttpHeader(s)`, `EPcHttpTransport`, `PC_HTTP_DEFAULT_TIMEOUT_MS`, and the helpers
+  `PcHttpFindHeader`, `PcHttpSplitHeaderLine`, `PcHttpMethodHasBody`,
+  `PcHttpMethodIsIdempotent`, `PcUrlWithoutQuery`, `PcParseHttpUrl` (`TPcHttpUrl`). Every status
+  is an answer; `EPcHttpTransport` means no answer (refused, unreachable, a timeout, TLS, an
+  answer that isn't HTTP), and its message names the method and the URL without its query and
+  keeps the cause's class and text (a refused certificate says why).
+- `PascalCommon.Http.Client`: `PcNewHttpTransport` and `TPcHttpOptions`. An HTTP/1.1 client of
+  its own over `PascalCommon.Transport`, the same on Delphi and FPC (H2, H3): Content-Length,
+  chunked (trailers dropped) and read-to-close bodies, 1xx skipped, no redirects, compression,
+  proxy or HTTP/2 (a transfer coding other than chunked is refused as not HTTP). https is checked against the system store and by host name when the options
+  are zeroed; `Tls.CaFile` trusts a private CA; `Tls.CertFile`/`KeyFile` give mTLS;
+  `Tls.SkipServerVerification` turns the checks off (insecure). `TimeoutMs` is the connect
+  budget and the deadline of each wait. Limits: 64 KiB of head, `MaxResponseBytes` of body
+  (64 MiB by default). A pool of kept-alive connections per transport (`MaxIdlePerHost`, 4;
+  `IdleTimeoutMs`, 4 s; `NoKeepAlive`), checked before each reuse without waiting; a request
+  that failed on a reused connection before any byte of the answer is sent once more, for the
+  idempotent methods only. A request it can't send as given raises `EArgumentException` before
+  connecting: a bad URL, method or header name, a control character in a value, or a header the
+  client owns (`Host`, `Content-Length`, `Transfer-Encoding`, `Connection`).
+- `PascalCommon.Http.Fake`: `TPcFakeHttpTransport` (answers from a queue, records the requests,
+  thread-safe) and `EPcFakeHttpTransport`: pascal-api-infra-faa's fake, renamed.
+- `PascalCommon.Utf8`: `EPcTextEncoding` and `PcUtf8BytesToString(Bytes, Origin)`, the raising
+  form of `PcTryUtf8BytesToString` (pascal-api-infra-faa's `PaUtf8BytesToString`, same
+  messages). An answer whose body isn't UTF-8 raises it.
+- `TPcEndpoint.HasPendingInput`: whether the peer sent anything not read yet (bytes or its
+  close), without waiting and without consuming it (`recv` with `MSG_PEEK`), on the Windows and
+  POSIX TCP endpoints and through TLS (the raw socket's answer). The default raises
+  `EPcTransport`. The pool uses it: a read with a 1 ms deadline, the design's first plan, costs
+  15.5 ms on Windows (gotcha 18).
+- `tests/pki`: `selfsrv*` (a self-signed server certificate with the right names) and
+  `wrongname*` (signed by the test CA for `other.invalid` only).
+
+### Measured
+
+Loopback, FPC 3.2.2, ms per exchange, https verified: pooled 0.27 (Windows, SChannel), 0.44
+(Windows, OpenSSL 3.2), 0.28 (Linux, OpenSSL 3.0); a new connection each time 7.8, 10.4 and
+8.2. On FPC 3.2.2, fphttpclient (what pascal-api-infra-faa uses today) loads OpenSSL 3 neither
+on Windows nor on Debian 12 without `libssl-dev`, accepts a self-signed certificate, and with
+`VerifyPeerCert` still accepts a wrong host name (`.ci/probe-http/findings.md`, git-ignored;
+summarized in `docs/http-design.md`).
+
+### Tests
+
+- 20 contract tests (`PascalCommon.HttpTests`): the helpers, URL parsing and refusals, the fake,
+  the requests refused before connecting, a closed port, `PcUtf8BytesToString`.
+- 36 loopback tests (`PascalCommon.HttpClientTests`), against a server in the process with one
+  thread per connection: framing (Content-Length, chunked with extensions and trailers, to the
+  close, HEAD, 204, 1xx, duplicate headers, a 302), UTF-8 both ways, the answers that aren't HTTP
+  (a garbage line, a close before the status line, a truncated body, a bad chunk size, a folded
+  header, a transfer coding other than chunked, oversized head and bodies), a body that isn't UTF-8, a silent server, the pool (reuse,
+  the GET replayed and the POST not, a server's close seen before reuse, `Connection: close`,
+  HTTP/1.0, `NoKeepAlive`, the idle timeout, 8 threads at once); TLS with a private CA by IP and
+  by name, the system store refusing it, a self-signed certificate and a wrong name refused with
+  the cause in the message, `SkipServerVerification`, http to a TLS port, keep-alive and a replay
+  over TLS. On Windows the TLS cases run on SChannel and again on OpenSSL.
+- `HasPendingInput` through TCP and through TLS.
+- On Delphi the time zone tests moved to a project of their own,
+  `tests/Unit/PascalCommon.TimeZonesSuite.dproj`, in `PascalCommon.groupproj`: with the HTTP
+  units the unit test project reached the size (50 936 lines) at which Delphi Community Edition
+  shows its EULA reminder on every build, as in 1.22.0. FPC keeps one runner.
+- FPC 3.2.2: 687/687 on Windows x64, 597/597 on Linux x86_64, 0 leaks; the HTTP, TCP and TLS
+  suites 10 times each in 3 containers at once at `--cpus=1`, all green, and `THttpClientTests`
+  40 times in 4 containers (those runs found a race in the pool's expiry, fixed before the
+  release: `docs/http-design.md`, "Measured in step 3"). Delphi 12 CE Win32 and Win64: 651/651
+  (`PascalCommon.UnitTests`) and 36/36 (`PascalCommon.TimeZonesSuite`), 0 leaks, no EULA
+  reminder.
+
 ## [1.30.0] - 2026-11-05
 
 ### Added

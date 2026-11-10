@@ -177,6 +177,25 @@ type
     /// and under TLS without a client certificate. Meaningful only after
     /// Handshake.
     function TryPeerIdentity(out AIdentity: TPcPeerIdentity): Boolean; virtual;
+    /// Whether the peer sent anything not read yet (bytes, or its close),
+    /// checked without waiting and without consuming it (1.31.0). For a
+    /// connection pool: an idle connection with something pending was closed
+    /// by the peer, or is out of step, and must not be reused. True also
+    /// after CloseAbort and when the socket reports an error. Call it from
+    /// the thread that reads, with no Read running.
+    ///
+    /// It doesn't wait on purpose: a 1 ms wait costs 15.5 ms on Windows (the
+    /// timer's resolution; measured with WaitForSingleObject, 2026-11-10),
+    /// more than a new TLS connection on loopback.
+    ///
+    /// A TLS endpoint answers for its raw socket: a record that carries no
+    /// data (a close_notify, a late session ticket) counts as pending, and
+    /// plaintext the session already decrypted doesn't. Both are the safe
+    /// answer for a pool.
+    ///
+    /// The default raises EPcTransport: a transport that can't tell must
+    /// say so rather than answer "nothing pending".
+    function HasPendingInput: Boolean; virtual;
   end;
 
   { A server's listening point. }
@@ -333,6 +352,12 @@ function TPcEndpoint.TryPeerAddress(out AAddress: string): Boolean;
 begin
   AAddress := '';
   Result := False;
+end;
+
+function TPcEndpoint.HasPendingInput: Boolean;
+begin
+  Result := True; // never reached; keeps the compilers quiet
+  raise EPcTransport.Create(ClassName + ' cannot tell whether input is pending');
 end;
 
 function TPcEndpoint.TryPeerIdentity(out AIdentity: TPcPeerIdentity): Boolean;

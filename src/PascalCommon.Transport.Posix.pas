@@ -80,6 +80,7 @@ type
     procedure SetWriteDeadline(ATimeoutMs: Cardinal); override;
     /// True only for an AF_INET/AF_INET6 socket; an AF_UNIX one has no IP.
     function TryPeerAddress(out AAddress: string): Boolean; override;
+    function HasPendingInput: Boolean; override;
     property Fd: cint read FFd;
   end;
 
@@ -121,6 +122,7 @@ const
   // SHUT_*/MSG_NOSIGNAL uniformly on every target.
   PC_SHUT_RDWR = 2;
   PC_MSG_DONTWAIT = $40;
+  PC_MSG_PEEK = 2;
   PC_MSG_NOSIGNAL = $4000;
 
 // Declared here so the address travels as an opaque pointer + size and the
@@ -214,6 +216,20 @@ begin
   if pc_getpeername(FFd, @LStorage, LLen) <> 0 then
     Exit; // best effort: the log goes on without an address
   Result := PcFormatSockAddr(LStorage, PC_AF_INET6_POSIX, AAddress);
+end;
+
+function TPcPosixSocketEndpoint.HasPendingInput: Boolean;
+var
+  LByte: Byte;
+  LErr: cint;
+begin
+  if PcAtomicGet(FClosed) <> 0 then
+    Exit(True);
+  // A byte, or 0 for the peer's FIN, is input pending.
+  if NativeInt(fpRecv(FFd, @LByte, 1, PC_MSG_PEEK or PC_MSG_DONTWAIT)) >= 0 then
+    Exit(True);
+  LErr := fpgeterrno;
+  Result := (LErr <> ESysEAGAIN) and (LErr <> ESysEINTR);
 end;
 
 procedure TPcPosixSocketEndpoint.WaitReadyOrStop(AEvents: SmallInt;

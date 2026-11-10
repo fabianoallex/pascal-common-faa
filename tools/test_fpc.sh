@@ -7,7 +7,8 @@
 # The Delphi side has no command-line equivalent: Delphi Community Edition
 # doesn't compile outside the IDE (dcc32 prints "This version of the product
 # does not support command line compiling." and exits with code 0). Run
-# tests\Unit\PascalCommon.UnitTests.dproj from the IDE.
+# tests\Unit\PascalCommon.UnitTests.dproj and
+# tests\Unit\PascalCommon.TimeZonesSuite.dproj from the IDE.
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LAZBUILD="${LAZBUILD:-lazbuild}"

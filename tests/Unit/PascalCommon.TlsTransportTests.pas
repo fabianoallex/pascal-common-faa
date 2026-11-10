@@ -101,6 +101,7 @@ type
     [Test] procedure ListenOver_AnyListener_RoundTrip;
     [Test] procedure ListenOver_WithoutCertificate_RaisesAndFreesTheInner;
     [Test] procedure BackendInfo_NamesTheBackendInUse;
+    [Test] procedure HasPendingInput_ThroughTls;
   end;
 
   {$IFDEF MSWINDOWS}
@@ -608,6 +609,49 @@ begin
   LLen := FClientEp.Read(LIn[0], SizeOf(LIn));
   SetString(LText, PAnsiChar(@LIn[0]), LLen);
   TAssert.AssertEquals('pong', string(LText));
+end;
+
+// Polls until AEndpoint has input pending, or CWaitMs passes.
+function WaitPending(AEndpoint: TPcEndpoint): Boolean;
+var
+  LDeadline: UInt64;
+begin
+  LDeadline := PcTickMs + CWaitMs;
+  repeat
+    if AEndpoint.HasPendingInput then
+      Exit(True);
+    Sleep(1);
+  until PcTickMs >= LDeadline;
+  Result := False;
+end;
+
+procedure TTlsTransportTests.HasPendingInput_ThroughTls;
+var
+  LOk: Boolean;
+  LError: string;
+  LBuf: array[0..3] of Byte;
+  LGot: Integer;
+begin
+  if not Ready then
+    Exit;
+  StartServer('');
+  LOk := TryConnect('127.0.0.1', ClientOpts('', 'ca_cert.pem', False), LError);
+  TAssert.AssertTrue(LError, LOk);
+  TAssert.AssertEquals('server', '', ServerResult);
+  // One exchange first: a TLS 1.3 server sends session tickets after the
+  // handshake, and the client's first read takes them in (an HTTP client's
+  // pool only checks a connection after a whole answer was read).
+  FillChar(LBuf, SizeOf(LBuf), 1);
+  ServerEndpoint.WriteExactly(LBuf, 4);
+  LGot := 0;
+  while LGot < 4 do
+    Inc(LGot, FClientEp.Read(LBuf[LGot], 4 - LGot));
+  TAssert.AssertFalse('idle after a whole read', FClientEp.HasPendingInput);
+  ServerEndpoint.WriteExactly(LBuf, 1);
+  TAssert.AssertTrue('a record', WaitPending(FClientEp));
+  TAssert.AssertEquals(1, FClientEp.Read(LBuf, 4));
+  ServerEndpoint.CloseAbort;
+  TAssert.AssertTrue('the peer''s close', WaitPending(FClientEp));
 end;
 
 procedure TTlsTransportTests.ClientVerifiesServer_PrivateCa_ByIp;

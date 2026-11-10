@@ -71,6 +71,8 @@ type
     procedure SetWriteDeadline(ATimeoutMs: Cardinal); override;
     /// Not a TLS matter: always the inner endpoint's, even before Handshake.
     function TryPeerAddress(out AAddress: string): Boolean; override;
+    /// The raw socket's (see TPcEndpoint.HasPendingInput).
+    function HasPendingInput: Boolean; override;
     /// Server side under mTLS, after Handshake. A client gets False: who the
     /// server is was decided by the chain and hostname check during the
     /// handshake; a name returned here would invite deciding trust later.
@@ -300,6 +302,11 @@ end;
 function TPcTlsEndpoint.TryPeerAddress(out AAddress: string): Boolean;
 begin
   Result := FInner.TryPeerAddress(AAddress);
+end;
+
+function TPcTlsEndpoint.HasPendingInput: Boolean;
+begin
+  Result := FInner.HasPendingInput;
 end;
 
 function TPcTlsEndpoint.TryPeerIdentity(out AIdentity: TPcPeerIdentity): Boolean;

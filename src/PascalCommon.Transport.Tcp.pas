@@ -100,6 +100,7 @@ type
     procedure SetReadDeadline(ATimeoutMs: Cardinal); override;
     procedure SetWriteDeadline(ATimeoutMs: Cardinal); override;
     function TryPeerAddress(out AAddress: string): Boolean; override;
+    function HasPendingInput: Boolean; override;
   end;
 
   TPcTcpWinListener = class(TPcListener)
@@ -274,6 +275,7 @@ end;
 
 const
   PC_SD_BOTH = 2;
+  PC_MSG_PEEK = 2;
   PC_FD_READ = $01;
   PC_FD_WRITE = $02;
   PC_FD_ACCEPT = $08;
@@ -476,6 +478,19 @@ begin
   if pc_getpeername(FSocket, @LStorage, LLen) <> 0 then
     Exit; // best effort: the log goes on without an address
   Result := PcFormatSockAddr(LStorage, PC_AF_INET6_WINDOWS, AAddress);
+end;
+
+function TPcTcpWinEndpoint.HasPendingInput: Boolean;
+var
+  LByte: Byte;
+begin
+  if PcAtomicGet(FClosed) <> 0 then
+    Exit(True);
+  // The socket is non-blocking (WSAEventSelect): a peek answers at once.
+  // A byte, or 0 for the peer's FIN, is input pending.
+  if recv(FSocket, LByte, 1, PC_MSG_PEEK) >= 0 then
+    Exit(True);
+  Result := WSAGetLastError <> WSAEWOULDBLOCK;
 end;
 
 procedure TPcTcpWinEndpoint.WaitReadyOrStop(AForWrite: Boolean;

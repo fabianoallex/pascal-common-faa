@@ -5,7 +5,11 @@ program PascalCommon.UnitTests;
   The sibling FPCUnit suite lives in tests/Unit/fpc — same coverage and
   identical test bodies: the files there are GENERATED from these by
   tools/gen_fpc_mirror.py (PascalCommon.DUnitXCompat exists for that). Always
-  edit the DUnitX masters here and regenerate the mirror. }
+  edit the DUnitX masters here and regenerate the mirror.
+
+  On Delphi the time zone tests are a project of their own,
+  PascalCommon.TimeZonesSuite (see its header: Delphi Community Edition's
+  EULA reminder); FPC runs them in its one runner. }
 
 {$APPTYPE CONSOLE}
 {$STRONGLINKTYPES ON}
@@ -35,8 +39,6 @@ uses
   PascalCommon.Tracing in '..\..\src\PascalCommon.Tracing.pas',
   PascalCommon.SingleFlight in '..\..\src\PascalCommon.SingleFlight.pas',
   PascalCommon.Cache in '..\..\src\PascalCommon.Cache.pas',
-  PascalCommon.TimeZones.Data in '..\..\src\PascalCommon.TimeZones.Data.pas',
-  PascalCommon.TimeZones in '..\..\src\PascalCommon.TimeZones.pas',
   PascalCommon.Passwords in '..\..\src\PascalCommon.Passwords.pas',
   PascalCommon.StopSignal in '..\..\src\PascalCommon.StopSignal.pas',
   // Late on purpose: it must not install here (see its test).
@@ -46,6 +48,9 @@ uses
   PascalCommon.Transport.SChannel in '..\..\src\PascalCommon.Transport.SChannel.pas',
   PascalCommon.Transport.OpenSSL in '..\..\src\PascalCommon.Transport.OpenSSL.pas',
   PascalCommon.Transport.Tls in '..\..\src\PascalCommon.Transport.Tls.pas',
+  PascalCommon.Http in '..\..\src\PascalCommon.Http.pas',
+  PascalCommon.Http.Client in '..\..\src\PascalCommon.Http.Client.pas',
+  PascalCommon.Http.Fake in '..\..\src\PascalCommon.Http.Fake.pas',
   PascalJsonMapper.Json in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas',
   PascalJsonMapper.Mapper in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas',
   PascalCommon.JsonMapper.Optionals in '..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas',
@@ -71,13 +76,14 @@ uses
   PascalCommon.TracingTests in 'PascalCommon.TracingTests.pas',
   PascalCommon.CacheTests in 'PascalCommon.CacheTests.pas',
   PascalCommon.SingleFlightTests in 'PascalCommon.SingleFlightTests.pas',
-  PascalCommon.TimeZonesTests in 'PascalCommon.TimeZonesTests.pas',
   PascalCommon.PasswordsTests in 'PascalCommon.PasswordsTests.pas',
   PascalCommon.StopSignalTests in 'PascalCommon.StopSignalTests.pas',
   PascalCommon.WinHeapTests in 'PascalCommon.WinHeapTests.pas',
   PascalCommon.TransportTests in 'PascalCommon.TransportTests.pas',
   PascalCommon.TcpTransportTests in 'PascalCommon.TcpTransportTests.pas',
   PascalCommon.TlsTransportTests in 'PascalCommon.TlsTransportTests.pas',
+  PascalCommon.HttpTests in 'PascalCommon.HttpTests.pas',
+  PascalCommon.HttpClientTests in 'PascalCommon.HttpClientTests.pas',
   PascalCommon.JsonMapperOptionalsTests in 'PascalCommon.JsonMapperOptionalsTests.pas';
 
 var

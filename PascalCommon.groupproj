@@ -6,6 +6,9 @@
         <Projects Include="tests\Unit\PascalCommon.UnitTests.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="tests\Unit\PascalCommon.TimeZonesSuite.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -23,14 +26,23 @@
     <Target Name="PascalCommon_UnitTests:Make">
         <MSBuild Projects="tests\Unit\PascalCommon.UnitTests.dproj" Targets="Make"/>
     </Target>
+    <Target Name="PascalCommon_TimeZonesSuite">
+        <MSBuild Projects="tests\Unit\PascalCommon.TimeZonesSuite.dproj"/>
+    </Target>
+    <Target Name="PascalCommon_TimeZonesSuite:Clean">
+        <MSBuild Projects="tests\Unit\PascalCommon.TimeZonesSuite.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PascalCommon_TimeZonesSuite:Make">
+        <MSBuild Projects="tests\Unit\PascalCommon.TimeZonesSuite.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="PascalCommon_UnitTests"/>
+        <CallTarget Targets="PascalCommon_UnitTests;PascalCommon_TimeZonesSuite"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="PascalCommon_UnitTests:Clean"/>
+        <CallTarget Targets="PascalCommon_UnitTests:Clean;PascalCommon_TimeZonesSuite:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="PascalCommon_UnitTests:Make"/>
+        <CallTarget Targets="PascalCommon_UnitTests:Make;PascalCommon_TimeZonesSuite:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

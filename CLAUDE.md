@@ -102,10 +102,17 @@ has the optionals bridge to it.
 - **Run on FPC (Windows):** `sh tools/test_fpc.sh`. **On Linux:** `sh tools/test_fpc_docker.sh`
   (FPC 3.2.2 container; `FPC_IMAGE` selects the image). **CI:** `.github/workflows/ci.yml` only
   calls `sh tools/ci-test.sh`.
-- **On Delphi:** open `PascalCommon.groupproj` and run `tests/Unit/PascalCommon.UnitTests.dproj`
-  (Win32 and Win64). Delphi Community Edition doesn't compile from the command line: `dcc32`
-  prints "This version of the product does not support command line compiling." and **exits
-  with code 0**. Don't read that as success.
+- **On Delphi:** open `PascalCommon.groupproj` and run **both** test projects, Win32 and Win64:
+  `tests/Unit/PascalCommon.UnitTests.dproj` and `tests/Unit/PascalCommon.TimeZonesSuite.dproj`
+  (the time zone tests, apart since 1.31.0). Delphi Community Edition doesn't compile from the
+  command line: `dcc32` prints "This version of the product does not support command line
+  compiling." and **exits with code 0**. Don't read that as success. The executables the IDE
+  built can be run from a shell (`--exitbehavior:Continue`).
+- **Delphi CE's "EULA Reminder" on every build** means a test project's sources passed a size
+  CE doesn't document (between 44 450 and 50 936 lines, measured 2026-11-10). It happened in
+  1.22.0 and 1.31.0. Keep each Delphi test project below it: move a self-contained group of
+  suites to a project of its own, as `PascalCommon.TimeZonesSuite` (its header has the story).
+  FPC keeps one runner with every suite.
 - **Acceptance criterion:** every test green **and 0 leaks on both sides** (heaptrc on FPC,
   `ReportMemoryLeaksOnShutdown` on Delphi).
 - Floating point **always with an explicit delta** (`AssertEquals(E, A, 0)` for exact).

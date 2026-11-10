@@ -26,6 +26,8 @@ bytes.
 | `rogue_ca_*`, `rogue_cert.pem` / `rogue_key.pem` / `rogue.pfx` | **Intruder**: a well-formed certificate from a CA the server doesn't know (`pipes-faa-rogue-CA`). Must be refused. |
 | `twin_ca_*`, `twin_cert.pem` / `twin_key.pem` / `twin.pfx` | Client of a **twin** CA: the same name and serial number as `ca_cert.pem`, another key. Refused only if the root is compared by its bytes, not by issuer + serial. |
 | `selfsigned_cert.pem` / `selfsigned_key.pem` / `selfsigned.pfx` | A self-signed client certificate. Must be refused. |
+| `selfsrv_cert.pem` / `selfsrv_key.pem` / `selfsrv.pfx` | A self-signed **server** certificate with the right names (`CN=localhost`, SAN `DNS:localhost` and `IP:127.0.0.1`, EKU serverAuth). A client must refuse it unless it skips verification. Added in 1.31.0 for the HTTP client's tests. |
+| `wrongname_cert.pem` / `wrongname_key.pem` / `wrongname.pfx` | A server certificate **signed by the test CA** but only for `DNS:other.invalid` (EKU serverAuth). A client that checks the chain and not the name accepts it; it must be refused. Added in 1.31.0. |
 
 PEM serves OpenSSL (certificate and key apart); PFX serves SChannel (both in one file).
 Password of every PFX: `pipestest`.
@@ -44,6 +46,8 @@ openssl req -x509 -newkey rsa:2048 -nodes -keyout ca_key.pem -out ca_cert.pem \
 # server:   SAN DNS:localhost, IP:127.0.0.1; EKU serverAuth
 # clients:  EKU clientAuth, signed by the CA
 # intruder: EKU clientAuth, signed by a second CA, the same CN as the client
+# selfsrv:  req -x509 with the server's subject, SAN and EKU, no CA
+# wrongname: signed by the CA, SAN DNS:other.invalid only, EKU serverAuth
 # PFX:      openssl pkcs12 -export -in X_cert.pem -inkey X_key.pem -out X.pfx -passout pass:pipestest
 ```
 

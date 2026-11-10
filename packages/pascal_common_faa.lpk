@@ -15,7 +15,7 @@
     </CompilerOptions>
     <Description Value="Base library shared by the *-faa libraries (Delphi and Free Pascal/Lazarus, dual-compiler): optional/nullable types, portable atomics and monotonic time, a monitor and a thread pool, a clock/sleep context, a bounded cache, a thread-safe console Writeln, W3C trace context ids, metrics with a Prometheus writer, a cache with expiry and tag invalidation, spans with a batch processor, password hashing, a console stop request, and TCP and TLS transport (SChannel and OpenSSL)."/>
     <License Value="MIT"/>
-    <Version Major="1" Minor="30" Release="0"/>
+    <Version Major="1" Minor="31" Release="0"/>
     <Files>
       <Item>
         <Filename Value="..\src\pascalcommon.inc"/>
@@ -140,6 +140,18 @@
       <Item>
         <Filename Value="..\src\PascalCommon.Transport.Tls.pas"/>
         <UnitName Value="PascalCommon.Transport.Tls"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Http.pas"/>
+        <UnitName Value="PascalCommon.Http"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Http.Client.pas"/>
+        <UnitName Value="PascalCommon.Http.Client"/>
+      </Item>
+      <Item>
+        <Filename Value="..\src\PascalCommon.Http.Fake.pas"/>
+        <UnitName Value="PascalCommon.Http.Fake"/>
       </Item>
     </Files>
     <RequiredPkgs>
