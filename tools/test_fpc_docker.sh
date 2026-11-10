@@ -10,6 +10,9 @@
 # FPC_IMAGE: any image with FPC 3.2.2 on the PATH (default: fpc322-bookworm;
 # tools/ci-test.sh builds one). Note: heaptrc on Linux only writes its summary
 # when given a log file (HEAPTRC=log=...), hence the log below.
+#
+# FPC_DOCKER_OPTS: extra docker run options, unquoted (tools/ci-test.sh passes
+# --security-opt seccomp=unconfined for i386: see the note there).
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE="${FPC_IMAGE:-fpc322-bookworm}"
@@ -21,7 +24,8 @@ python tools/gen_fpc_mirror.py --check
 # The jsonmapper bridge's tests build the submodule's sources.
 [ -f external/pascal-jsonmapper-faa/src/PascalJsonMapper.Mapper.pas ]   || { echo "external/pascal-jsonmapper-faa is empty: git submodule update --init"; exit 1; }
 
-MSYS_NO_PATHCONV=1 docker run --rm -v "$MOUNT:/src:ro" "$IMAGE" sh -c '
+# shellcheck disable=SC2086 # FPC_DOCKER_OPTS is a list of options
+MSYS_NO_PATHCONV=1 docker run --rm ${FPC_DOCKER_OPTS:-} -v "$MOUNT:/src:ro" "$IMAGE" sh -c '
   set -e
   mkdir -p /t/u /t/external && cp -r /src/src /src/tests /src/bridges /t/
   cp -r /src/external/pascal-jsonmapper-faa /t/external/
