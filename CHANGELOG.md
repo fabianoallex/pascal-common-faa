@@ -6,10 +6,12 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
-## [1.31.0] - not tagged yet
+## [1.31.0] - 2026-11-10
 
-The tag waits for pascal-api-infra-faa to run on it (`docs/http-design.md`, H11): a mistake in
-the interface found in that migration is then still free to fix.
+Tagged after pascal-api-infra-faa ran on it (`docs/http-design.md`, H11): its 0.33.0 makes its
+transport names aliases of these, with no change to the interface here; FPC Windows and Linux
+and Delphi 12 Win32/Win64 green there, and pascal-agenda-faa's suites and desktop smoke pass
+unchanged on both new versions (FPC Windows).
 
 ### Added
 

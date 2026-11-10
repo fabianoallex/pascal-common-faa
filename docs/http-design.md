@@ -1,10 +1,12 @@
 # HTTP client transport — design
 
-Status: **step 3 done, 2026-11-10.** The user accepted H1–H11 on 2026-11-10 and confirmed that no
+Status: **step 4 done, 2026-11-10; tagged 1.31.0.** The user accepted H1–H11 on 2026-11-10 and confirmed that no
 current caller needs a proxy (H3). Implemented in 1.31.0 (`PascalCommon.Http`, `.Http.Client`,
 `.Http.Fake`; `EPcTextEncoding`/`PcUtf8BytesToString`; `TPcEndpoint.HasPendingInput`), with one
 change to H5 found while implementing it (the check before reuse; see H5 and "Measured in step
-3"). Step 4 (pascal-api-infra-faa) is next, asked before starting; the tag waits for it (H11).
+3"). Step 4: pascal-api-infra-faa 0.33.0 runs on it through aliases (H9), with no change to the
+interface here; pascal-agenda-faa passes unchanged (its suites, client check and desktop smoke
+on FPC Windows). Step 5: the brief for pascal-search-faa is in that repository's `prompt/`.
 
 ## Why
 
