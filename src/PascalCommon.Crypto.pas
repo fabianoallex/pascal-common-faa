@@ -25,6 +25,14 @@ unit PascalCommon.Crypto;
   form gives each one text. The lenient one stays as it was (a behavior
   change within 1.x would break the versioning rule).
 
+  Standard Base64 (RFC 4648 section 4, with padding) came in 1.32.0, for
+  pascal-email-faa (MIME bodies, SMTP AUTH, HTTP Basic auth);
+  pascal-api-infra-faa had two private decoders of it. Delphi's
+  TNetEncoding.Base64 breaks lines at 76 characters by default and FPC's
+  base64 unit has a different API, so neither is a shared answer. The
+  encoder writes one line: MIME's 76-column wrapping is the caller's. The
+  decoder skips CR, LF, space and tab, so a MIME body decodes as it is.
+
   PBKDF2-HMAC-SHA256 (RFC 8018) came in 1.18.0, for password hashing (first
   user: pascal-agenda-faa). It lives here, not in the consumer, because the
   fast form needs SHA-256's compression function: HMAC's inner and outer
@@ -70,6 +78,16 @@ function PcBase64UrlDecode(const AText: string; out ABytes: TBytes): Boolean;
 /// bits after the last byte zero, so a byte string has one text. False
 /// otherwise, ABytes nil. For signatures and tokens.
 function PcBase64UrlDecodeStrict(const AText: string; out ABytes: TBytes): Boolean;
+
+/// Standard Base64 (RFC 4648 section 4: '+' and '/', '=' padding), one line
+/// with no breaks (1.32.0).
+function PcBase64Encode(const ABytes: TBytes): string;
+/// Standard Base64, with or without padding (1.32.0). CR, LF, space and tab
+/// are skipped anywhere (MIME breaks lines). False, ABytes nil, on any other
+/// character outside the alphabet, '=' anywhere but at the end, or an
+/// impossible length. The bits after the last byte are ignored, as in
+/// PcBase64UrlDecode: not for signatures.
+function PcBase64Decode(const AText: string; out ABytes: TBytes): Boolean;
 
 /// Compares in time independent of where the first difference is (for
 /// signatures).
@@ -346,6 +364,114 @@ begin
   Result := PcBase64UrlDecode(AText, ABytes) and (PcBase64UrlEncode(ABytes) = AText);
   if not Result then
     ABytes := nil;
+end;
+
+const
+  BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+function PcBase64Encode(const ABytes: TBytes): string;
+var
+  I, LLen, LOut: Integer;
+  LGroup: Cardinal;
+begin
+  LLen := Length(ABytes);
+  // Sized once: attachments of several MB go through here.
+  SetLength(Result, ((LLen + 2) div 3) * 4);
+  I := 0;
+  LOut := 1;
+  while I + 2 < LLen do
+  begin
+    LGroup := (Cardinal(ABytes[I]) shl 16) or (Cardinal(ABytes[I + 1]) shl 8) or ABytes[I + 2];
+    Result[LOut] := BASE64_CHARS[(LGroup shr 18) and 63 + 1];
+    Result[LOut + 1] := BASE64_CHARS[(LGroup shr 12) and 63 + 1];
+    Result[LOut + 2] := BASE64_CHARS[(LGroup shr 6) and 63 + 1];
+    Result[LOut + 3] := BASE64_CHARS[LGroup and 63 + 1];
+    Inc(I, 3);
+    Inc(LOut, 4);
+  end;
+  case LLen - I of
+    1:
+      begin
+        LGroup := Cardinal(ABytes[I]) shl 16;
+        Result[LOut] := BASE64_CHARS[(LGroup shr 18) and 63 + 1];
+        Result[LOut + 1] := BASE64_CHARS[(LGroup shr 12) and 63 + 1];
+        Result[LOut + 2] := '=';
+        Result[LOut + 3] := '=';
+      end;
+    2:
+      begin
+        LGroup := (Cardinal(ABytes[I]) shl 16) or (Cardinal(ABytes[I + 1]) shl 8);
+        Result[LOut] := BASE64_CHARS[(LGroup shr 18) and 63 + 1];
+        Result[LOut + 1] := BASE64_CHARS[(LGroup shr 12) and 63 + 1];
+        Result[LOut + 2] := BASE64_CHARS[(LGroup shr 6) and 63 + 1];
+        Result[LOut + 3] := '=';
+      end;
+  end;
+end;
+
+function Base64Value(C: Char): Integer;
+begin
+  case C of
+    'A'..'Z': Result := Ord(C) - Ord('A');
+    'a'..'z': Result := Ord(C) - Ord('a') + 26;
+    '0'..'9': Result := Ord(C) - Ord('0') + 52;
+    '+': Result := 62;
+    '/': Result := 63;
+  else
+    Result := -1;
+  end;
+end;
+
+function PcBase64Decode(const AText: string; out ABytes: TBytes): Boolean;
+var
+  I, LCount, LValue, LChars, LPads, LBits: Integer;
+  LAcc: Cardinal;
+  C: Char;
+begin
+  ABytes := nil;
+  SetLength(ABytes, (Length(AText) * 3) div 4 + 3);
+  LAcc := 0;
+  LBits := 0;
+  LCount := 0;
+  LChars := 0;
+  LPads := 0;
+  for I := 1 to Length(AText) do
+  begin
+    C := AText[I];
+    if (C = #13) or (C = #10) or (C = ' ') or (C = #9) then
+      Continue;
+    if C = '=' then
+    begin
+      Inc(LPads);
+      Continue;
+    end;
+    LValue := Base64Value(C);
+    // A character after the padding, or outside the alphabet.
+    if (LValue < 0) or (LPads > 0) then
+    begin
+      ABytes := nil;
+      Exit(False);
+    end;
+    Inc(LChars);
+    LAcc := ((LAcc shl 6) or Cardinal(LValue)) and $FFFFFF;
+    Inc(LBits, 6);
+    if LBits >= 8 then
+    begin
+      Dec(LBits, 8);
+      ABytes[LCount] := Byte(LAcc shr LBits);
+      Inc(LCount);
+    end;
+  end;
+  // 4n + 1 characters can't come from whole bytes; padding, when present,
+  // completes the last group of four exactly.
+  if (LChars mod 4 = 1) or (LPads > 2) or
+    ((LPads > 0) and ((LChars + LPads) mod 4 <> 0)) then
+  begin
+    ABytes := nil;
+    Exit(False);
+  end;
+  SetLength(ABytes, LCount);
+  Result := True;
 end;
 
 function PcSameBytes(const A, B: TBytes): Boolean;

@@ -6,6 +6,17 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.32.0] - 2026-11-12
+
+### Added
+
+- `PascalCommon.Crypto`: `PcBase64Encode` and `PcBase64Decode`, standard Base64 (RFC 4648
+  section 4, `+`/`/`, `=` padding), for pascal-email-faa (MIME, SMTP AUTH, HTTP Basic auth);
+  pascal-api-infra-faa had two private decoders of it. The encoder writes one line (MIME's
+  76-column wrapping is the caller's); the decoder accepts text with or without padding and
+  skips CR, LF, space and tab. Delphi's `TNetEncoding.Base64` breaks lines at 76 by default and
+  FPC has no equivalent API, hence a function of its own.
+
 ## [1.31.1] - 2026-11-10
 
 ### Changed
