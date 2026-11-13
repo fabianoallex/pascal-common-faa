@@ -254,6 +254,10 @@ zones did.
   metric would still be recorded). If it ever moves, `ResendCount` is already there for its
   retries.
 - **pascal-search-faa:** each adapter wraps the transport it builds (HT1).
+- **pascal-email-faa** (0.1.0, not on the original list): the SES adapter wraps its transport,
+  its own or the one given to `Create`; the `traceparent` is added after the SigV4 signature,
+  outside `SignedHeaders` (its finding 13, reasoned, not measured against AWS). Its own `email
+  send` span (internal for SES) is the `POST`'s parent.
 - `using-faa-libraries` skill: a line on the decorator and the exporter trap.
 
 ### HT11 — version and release (accepted)
@@ -308,7 +312,11 @@ the parsed URL's labels per transport and keeping the series per label set.
    too); Meilisearch's task polls go through a second decorator with `NoSpans` over the same
    inner transport, and each wait is one internal span of its own (`meilisearch.wait_task`).
    Its `docs/design.md`, section 13; FPC Windows and Linux, Delphi 12 Win32/Win64, 0 leaks.
-6. Phase 2 (HT7), only when a pool problem asks for it.
+6. pascal-email-faa, in its own session. Done 2026-11-13 (0.1.0, not released): the SES
+   adapter wraps its transport as pascal-search-faa does; every sender also records an `email
+   send` span and `pascalemail.*` metrics of its own. Its `docs/design.md`, section 13 (E30-E35);
+   FPC Windows and Linux, Delphi 12 Win32/Win64, 0 leaks.
+7. Phase 2 (HT7), only when a pool problem asks for it.
 
 ## Open points
 
