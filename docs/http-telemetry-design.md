@@ -1,6 +1,6 @@
 # HTTP client telemetry — design
 
-Status: **step 4 done, 2026-11-13; tagged 1.33.0.** The user accepted the
+Status: **step 5 done, 2026-11-13; tagged 1.33.0.** The user accepted the
 recommendations and answered the three open questions the same day: `ResendCount` is added
 (HT6); with no current span there is no span by default (HT3); pascal-agenda-faa keeps its own
 spans (HT10). Implemented in `PascalCommon.Http.Telemetry`, with one change found while writing
@@ -303,7 +303,11 @@ the parsed URL's labels per transport and keeping the series per label set.
    Linux and Delphi 12 Win32/Win64; its HTTP scenarios on all four (Delphi: samples 01 and 02);
    the collector in its CI script got the MCP chain with the new attributes (`url.full` without
    the query, `server.address`, `server.port`, the status), checked by `otlp_check.py`.
-5. pascal-search-faa, in its own session (pascal-agenda-faa stays as it is, HT10).
+5. pascal-search-faa, in its own session (pascal-agenda-faa stays as it is, HT10). Done
+   2026-11-13: pascal-search-faa 0.3.0 wraps both adapters' transports (the one given to `New`
+   too); Meilisearch's task polls go through a second decorator with `NoSpans` over the same
+   inner transport, and each wait is one internal span of its own (`meilisearch.wait_task`).
+   Its `docs/design.md`, section 13; FPC Windows and Linux, Delphi 12 Win32/Win64, 0 leaks.
 6. Phase 2 (HT7), only when a pool problem asks for it.
 
 ## Open points
