@@ -55,6 +55,7 @@ uses
   PascalCommon.TlsTransportTests,
   PascalCommon.HttpTests,
   PascalCommon.HttpClientTests,
+  PascalCommon.HttpTelemetryTests,
   PascalCommon.JsonMapperOptionalsTests;
 
 var

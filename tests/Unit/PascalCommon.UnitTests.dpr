@@ -51,6 +51,7 @@ uses
   PascalCommon.Http in '..\..\src\PascalCommon.Http.pas',
   PascalCommon.Http.Client in '..\..\src\PascalCommon.Http.Client.pas',
   PascalCommon.Http.Fake in '..\..\src\PascalCommon.Http.Fake.pas',
+  PascalCommon.Http.Telemetry in '..\..\src\PascalCommon.Http.Telemetry.pas',
   PascalJsonMapper.Json in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas',
   PascalJsonMapper.Mapper in '..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas',
   PascalCommon.JsonMapper.Optionals in '..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas',
@@ -84,6 +85,7 @@ uses
   PascalCommon.TlsTransportTests in 'PascalCommon.TlsTransportTests.pas',
   PascalCommon.HttpTests in 'PascalCommon.HttpTests.pas',
   PascalCommon.HttpClientTests in 'PascalCommon.HttpClientTests.pas',
+  PascalCommon.HttpTelemetryTests in 'PascalCommon.HttpTelemetryTests.pas',
   PascalCommon.JsonMapperOptionalsTests in 'PascalCommon.JsonMapperOptionalsTests.pas';
 
 var

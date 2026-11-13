@@ -6,6 +6,26 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [Unreleased]
 
+## [1.33.0] - 2026-11-13
+
+### Added
+
+- `PascalCommon.Http.Telemetry` (`docs/http-telemetry-design.md`): `PcNewTracedHttpTransport`
+  wraps any `IPcHttpTransport` and records each `Send` as a client span (OpenTelemetry's HTTP
+  client conventions: `http.request.method`, `server.address`, `server.port`, `url.scheme`,
+  `url.full` without query or fragment, `http.response.status_code`, `error.type`), sends its
+  `traceparent`/`tracestate`, and observes `http.client.request.duration` (seconds,
+  `PC_DURATION_BUCKETS`) on `PcMetrics`. A status of 400 or more, or an exception, is an
+  error; the exception is re-raised unchanged. With no current span, or when the request
+  already carries `traceparent`, no span is made and the headers are left alone; the metric is
+  still recorded. `TPcHttpTelemetryOptions`: `NoSpans`, `NoMetrics`, `RootWhenNoParent`.
+  `PcHttpMetricMethod` (a method as a label, `_OTHER` outside RFC 9110's and PATCH). It replaces
+  the client spans written by hand in pascal-api-infra-faa's MCP executor and, later,
+  pascal-search-faa's adapters; pascal-agenda-faa keeps its own.
+- `TPcHttpRequest.ResendCount`: the tries the caller made before this one, recorded as
+  `http.request.resend_count`. `TPcHttpRequest.Create` sets it to 0; no transport acts on it.
+- Gotcha 20: a span exporter's own transport, traced with root spans, exports forever.
+
 ## [1.32.0] - 2026-11-12
 
 ### Added

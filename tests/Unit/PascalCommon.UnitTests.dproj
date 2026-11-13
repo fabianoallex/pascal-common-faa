@@ -144,6 +144,7 @@
         <DCCReference Include="..\..\src\PascalCommon.Http.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Http.Client.pas"/>
         <DCCReference Include="..\..\src\PascalCommon.Http.Fake.pas"/>
+        <DCCReference Include="..\..\src\PascalCommon.Http.Telemetry.pas"/>
         <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Json.pas"/>
         <DCCReference Include="..\..\external\pascal-jsonmapper-faa\src\PascalJsonMapper.Mapper.pas"/>
         <DCCReference Include="..\..\bridges\jsonmapper\PascalCommon.JsonMapper.Optionals.pas"/>
@@ -177,6 +178,7 @@
         <DCCReference Include="PascalCommon.TlsTransportTests.pas"/>
         <DCCReference Include="PascalCommon.HttpTests.pas"/>
         <DCCReference Include="PascalCommon.HttpClientTests.pas"/>
+        <DCCReference Include="PascalCommon.HttpTelemetryTests.pas"/>
         <DCCReference Include="PascalCommon.JsonMapperOptionalsTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

@@ -6,7 +6,9 @@ unit PascalCommon.Http;
   body in; the status, the headers and the text body out. This unit is the
   contract and its pure helpers, with no socket code: PcNewHttpTransport
   (PascalCommon.Http.Client) is the client, TPcFakeHttpTransport
-  (PascalCommon.Http.Fake) answers a test with no server.
+  (PascalCommon.Http.Fake) answers a test with no server, and
+  PcNewTracedHttpTransport (PascalCommon.Http.Telemetry) records the
+  exchanges of any of them as spans and a metric.
 
   It came from pascal-api-infra-faa's PascalApi.HttpTransport (1.31.0,
   docs/http-design.md), which came from pascal-agenda-faa; pascal-search-faa
@@ -58,6 +60,12 @@ type
     Body: string;
     /// 0: PC_HTTP_DEFAULT_TIMEOUT_MS. Per wait, not for the whole exchange.
     TimeoutMs: Integer;
+    /// The tries of this request the caller made before this one (0 for
+    /// the first), when it retries on its own. Only recorded
+    /// (http.request.resend_count, PascalCommon.Http.Telemetry); no
+    /// transport acts on it. Set by Create, like TimeoutMs: a record built
+    /// without Create has it uninitialized. Since 1.33.0.
+    ResendCount: Integer;
     class function Create(const AMethod, AUrl: string): TPcHttpRequest; static;
     procedure AddHeader(const AName, AValue: string);
     /// The first header named AName (any case); '' when absent.
@@ -299,6 +307,7 @@ begin
   Result.Headers := nil;
   Result.Body := '';
   Result.TimeoutMs := 0;
+  Result.ResendCount := 0;
 end;
 
 procedure TPcHttpRequest.AddHeader(const AName, AValue: string);

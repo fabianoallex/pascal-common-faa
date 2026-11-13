@@ -389,3 +389,20 @@ this library: an FPC i386 application under that Docker breaks the same way.
 seccomp option, so `tools/ci-test.sh` makes the i386 image with `docker run` + `docker commit`
 and passes the option to the test run through `FPC_DOCKER_OPTS` (`tools/test_fpc_docker.sh`).
 For an application in production, prefer a 64-bit build over turning seccomp off.
+
+## 20. A span exporter's transport, traced with root spans, exports forever
+
+**Symptom.** The batch processor never empties: every export adds spans to the queue, the
+collector receives a stream of `POST` client spans to its own `/v1/traces`, and
+`TPcTracing.DroppedCount` grows. Reasoned out in the design of `PascalCommon.Http.Telemetry`
+(`docs/http-telemetry-design.md`, HT3), not seen in a running program: the default prevents it.
+
+**Cause.** An OTLP exporter (pascal-api-infra-faa's `TOtlpHttpExporter`) sends each batch
+through an `IPcHttpTransport` on the processor's thread, which has no current span. Wrapped with
+`PcNewTracedHttpTransport` and `RootWhenNoParent = True`, each export is a new trace with one
+span, sampled at ratio 1, queued for the next export.
+
+**Fix.** Don't wrap an exporter's transport, or wrap it with the zeroed options: with no
+current span there is then no span, and only `http.client.request.duration` is recorded (the
+collector's latency, which is worth having). `RootWhenNoParent` is for a client whose calls
+start work of their own, such as a desktop application.
