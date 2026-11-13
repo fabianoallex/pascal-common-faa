@@ -38,3 +38,6 @@ packagefiles.xml
 
 # local scratch for CI downloads and probes
 .ci/
+
+# Working briefs in Portuguese, kept local (English-only repository)
+prompt/
