@@ -8,6 +8,11 @@ may change the API; each such change is listed here. From 1.0 on, a minor versio
 
 ## [1.33.0] - 2026-11-13
 
+Tagged after pascal-api-infra-faa ran on it (`docs/http-telemetry-design.md`, HT11): its 0.34.0
+moves the MCP executor's client span onto `PcNewTracedHttpTransport`, with no change to the
+interface here; FPC Windows and Linux (with a real OpenTelemetry Collector checking the MCP
+chain) and Delphi 12 Win32/Win64 green there.
+
 ### Added
 
 - `PascalCommon.Http.Telemetry` (`docs/http-telemetry-design.md`): `PcNewTracedHttpTransport`

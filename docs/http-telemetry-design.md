@@ -1,10 +1,11 @@
 # HTTP client telemetry — design
 
-Status: **step 2 done, 2026-11-13 (1.33.0, not tagged).** The user accepted the
+Status: **step 4 done, 2026-11-13; tagged 1.33.0.** The user accepted the
 recommendations and answered the three open questions the same day: `ResendCount` is added
 (HT6); with no current span there is no span by default (HT3); pascal-agenda-faa keeps its own
 spans (HT10). Implemented in `PascalCommon.Http.Telemetry`, with one change found while writing
-it: `PcHttpMetricMethod` is case-sensitive (see HT1). The tag waits for step 4 (HT11).
+it: `PcHttpMetricMethod` is case-sensitive (see HT1). Step 4: pascal-api-infra-faa 0.34.0 runs its MCP executor on it, with no change to the
+interface here; the tag followed.
 
 ## Why
 
@@ -298,6 +299,10 @@ the parsed URL's labels per transport and keeping the series per label set.
    `--cpus=1`, 0 leaks. Delphi 12 CE Win32 and Win64: built by the user in the IDE.
 3. The measurement of HT8: done (above).
 4. pascal-api-infra-faa on it (HT10), with `otlp_check.py`; asked before starting. Then the tag.
+   Done 2026-11-13: pascal-api-infra-faa 0.34.0, 505 unit tests, 0 leaks, on FPC Windows and
+   Linux and Delphi 12 Win32/Win64; its HTTP scenarios on all four (Delphi: samples 01 and 02);
+   the collector in its CI script got the MCP chain with the new attributes (`url.full` without
+   the query, `server.address`, `server.port`, the status), checked by `otlp_check.py`.
 5. pascal-search-faa, in its own session (pascal-agenda-faa stays as it is, HT10).
 6. Phase 2 (HT7), only when a pool problem asks for it.
 
